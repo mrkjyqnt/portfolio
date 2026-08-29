@@ -21,6 +21,7 @@ A working prototype of Mark Jay Sarcia Quinto's portfolio (full single-page, all
 - [Destination is prototype-first full single-page](tickets/04-destination-prototype-first-full-page.md) — all sections stubbed; prototype surfaces architecture decisions for the final build.
 - [mrkjyqnt's GitHub: 8 repos, 3 on resume, 4th optional](tickets/10-research-github-repos.md) — resume projects (`basepaint-assist`, `basepaint-plugin`, `cse-classroom`) are the anchors; `basepaint-lite` is the optional 4th; the three VB.NET repos are out.
 - [Stack setup (Aug 2026) locked](tickets/12-research-stack-setup.md) — `pnpm dlx shadcn@latest init -t vite`, React 19, Tailwind v4, install **`motion@^12`** (Framer Motion is renamed; import from `motion/react`), Node 22.x, Vercel needs `vercel.json` SPA rewrites.
+- [Scaffold landed in `portfolio/`](../../issues/3) — `pnpm dlx shadcn@latest init -t vite -p nova`, `motion@13` added, `vercel.json` with SPA rewrites, folder structure (`src/components/sections`, `src/data`, `src/components/effects`). Build clean. **Adjustment:** preset brought in base-ui (not Radix) and Geist font (not Space Grotesk / DM Sans / JetBrains Mono) — both fine, both swappable later.
 - [8 portfolio patterns + 8 "moves to consider"](tickets/11-research-portfolio-patterns.md) — staggered hero reveal, typewriter headline, Lenis smooth scroll, tag-driven project cloud, pinned horizontal strip, CSS marquee divider, numbered scroll rail, custom magnetic cursor. Suggested prototype default: stagger + typewriter + marquee divider.
 
 ## Not yet specified

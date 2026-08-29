@@ -1,6 +1,9 @@
 # Lock content per section + project priority + headshot strategy
 
-**Status:** open
+**Status:** closed
+**Date closed:** 2026-08-29
+**GitHub:** https://github.com/mrkjyqnt/portfolio/issues/2
+**Resolution:** [decisions/15-section-shapes.md](../decisions/15-section-shapes.md)
 **Type:** grilling (HITL — needs the user)
 **Blocks:** [Build the full single-page prototype](20-build-full-single-page-prototype.md)
 

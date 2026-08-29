@@ -11,7 +11,7 @@
 How do we go from zero to a runnable Vite + React + Tailwind + shadcn/ui + Framer Motion project, ready to receive prototype content?
 
 Scope:
-- Project root decision (this directory vs a new `portfolio/` subfolder) — recommend `portfolio/` to keep wayfinder artifacts separate from the app code.
+- Project root decision (this directory vs a new `portfolio/` subfolder) — recommend `portfolio/` to keep wayfinder artifacts separate from the app code. **Updated by resolution:** scaffolded under `portfolio/` initially, then flattened to repo root so GitHub URLs aren't double-nested.
 - `npm create vite@latest` with the `react-ts` template.
 - Tailwind install + config.
 - `npx shadcn@latest init` with sensible defaults (neutral base color, CSS variables, dark mode).

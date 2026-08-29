@@ -5,6 +5,7 @@ node_modules/
 
 # build output
 dist/
+dist-ssr/
 build/
 .vite/
 
@@ -14,6 +15,7 @@ npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
 # editor / OS
 .DS_Store
@@ -21,19 +23,21 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+*.sw?
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
 # env
 .env
 .env.local
 .env.*.local
+*.local
 
 # runtime
 .cache/
 .turbo/
-
-# portfolio app (will be scaffolded later under portfolio/)
-portfolio/node_modules/
-portfolio/dist/
 
 # wayfinder research notes that should not be public (none currently)
 # wayfinder/decisions/ — kept (commit decisions as they're made)

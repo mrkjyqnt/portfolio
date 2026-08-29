@@ -5,7 +5,7 @@ Mark Jay Sarcia Quinto — personal portfolio.
 This repo contains:
 
 - `wayfinder/` — the planning map for the portfolio (decisions, tickets, research findings). GitHub Issues track open work; closed tickets live in `wayfinder/tickets/` as commit history.
-- `portfolio/` — the actual portfolio app (Vite + React + Tailwind + shadcn/ui + Motion, dark mode default, deployed to Vercel). Scaffolded by ticket [#30](wayfinder/tickets/30-scaffold-project.md).
+- The actual portfolio app lives at the **repo root** (Vite + React + Tailwind + shadcn/ui + Motion, dark mode default, deployed to Vercel). Scaffolded by ticket [#30](wayfinder/tickets/30-scaffold-project.md). App source: `src/`, `index.html`, `package.json`, etc.
 - `Resume - Quinto.pdf` — the source of truth for name, experience, skills, education, and certificates.
 
 ## Stack (locked)

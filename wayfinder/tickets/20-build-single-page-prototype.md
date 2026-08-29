@@ -29,6 +29,6 @@ What "built" does **not** mean:
 
 ## Subagent brief
 
-None — this is the build itself. Use `/prototype` skill to drive the build. Capture the prototype in the project's `portfolio/` (or wherever [30](30-scaffold-project.md) landed it). Link the running dev URL and any screenshots from `wayfinder/decisions/20-prototype-screenshots.md` once rendered.
+None — this is the build itself. Use `/prototype` skill to drive the build. Capture the prototype in the project's repo root (where [30](30-scaffold-project.md) landed it). Link the running dev URL and any screenshots from `wayfinder/decisions/20-prototype-screenshots.md` once rendered.
 
 Resolution format: a screenshot or short Loom-style note per section, the chosen section-transition style, the project tree at the end, and a one-paragraph summary of what the prototype *reveals* about the architecture decisions for the final build (which become fresh tickets).

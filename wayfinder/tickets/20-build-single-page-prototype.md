@@ -1,7 +1,11 @@
 # Build the full single-page prototype
 
-**Status:** open
+**Status:** closed
 **Type:** prototype (HITL — agent builds, user reacts to the artifact)
+**Date closed:** 2026-08-29
+**GitHub:** https://github.com/mrkjyqnt/portfolio/issues/4
+**Prototype branch:** https://github.com/mrkjyqnt/portfolio/tree/prototype/variants
+**Resolution:** [decisions/20-prototype-variants.md](../decisions/20-prototype-variants.md)
 **Blocked by:**
 - [Pull mrkjyqnt GitHub repos and pick portfolio-worthy ones](10-research-github-repos.md)
 - [Survey dark-mode + motion-driven dev portfolio patterns](11-research-portfolio-patterns.md)

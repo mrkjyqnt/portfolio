@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# build output
+dist/
+build/
+.vite/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# runtime
+.cache/
+.turbo/
+
+# portfolio app (will be scaffolded later under portfolio/)
+portfolio/node_modules/
+portfolio/dist/
+
+# wayfinder research notes that should not be public (none currently)
+# wayfinder/decisions/ — kept (commit decisions as they're made)

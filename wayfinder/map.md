@@ -24,23 +24,18 @@ A working prototype of Mark Jay Sarcia Quinto's portfolio (full single-page, all
 - [Scaffold landed at the repo root](../../issues/3) — `pnpm dlx shadcn@latest init -t vite -p nova`, `motion@13` added, `vercel.json` with SPA rewrites, folder structure (`src/components/sections`, `src/data`, `src/components/effects`). Build clean. **Adjustment:** preset brought in base-ui (not Radix) and Geist font (not Space Grotesk / DM Sans / JetBrains Mono) — both fine, both swappable later. **Restructure:** originally scaffolded under `portfolio/` subfolder; flattened to repo root so GitHub URLs aren't double-nested (`github.com/mrkjyqnt/portfolio/blob/main/src/...`).
 - [Section shapes + avatar + project priority locked](../../issues/2) — avatar = existing GitHub B&W photo. Projects order = Plugin → Classroom → Assist (basepaint-lite out). 6 section shapes: Hero typewriter + 2 CTAs · About 2-col + chips · Experience timeline · Projects 3-card grid · Skills 2×2 chip grid (no skill bars) · Contact card + status badge. Motion: `whileInView` stagger, hover lift, no parallax.
 - [3-variant prototype built on `prototype/variants` branch](../../issues/4) — A = Linear Stack (single column, generous spacing) · B = Bento Mosaic (varied tile sizes, emerald/violet accents) · C = Editorial Asymmetric (serif italics, magazine numbers, full-bleed contact). Switch via `?variant=A|B|C` + bottom-center pill + ←/→ arrows. By-products on main: `src/data/` content + `card`/`badge`/`separator`/`avatar` shadcn primitives. Winner folds into main, throwaway branch deletes.
+- **[DECISION] VariantB (Plain Pro) chosen as the winner** — light mode default + dark mode toggle, refined typography, section numbers in primary color, project numbering `01 / 03`, tech chips with brand icons (SiClaude / SiPython / SiJavascript / SiTypescript / SiNextdotjs / SiVercel / SiHtml5 / SiCss / SiDotnet + Lucide fallbacks), Trophy icon for hackathon, `ghchart.rshah.org` GitHub graph (with `dark:invert dark:hue-rotate-180`), `Present` for the current role, Tooltip on every skill chip and project link, project cards get a left-border accent on hover. Folder structure: `src/components/sections/*` to be extracted from `src/prototype/VariantB.tsx`.
 - [8 portfolio patterns + 8 "moves to consider"](tickets/11-research-portfolio-patterns.md) — staggered hero reveal, typewriter headline, Lenis smooth scroll, tag-driven project cloud, pinned horizontal strip, CSS marquee divider, numbered scroll rail, custom magnetic cursor. Suggested prototype default: stagger + typewriter + marquee divider.
 
 ## Not yet specified
 
-- Specific color palette (within dark mode — slate / neutral / pure black / accent choice).
-- Typography pairings (Space Grotesk + DM Sans + JetBrains Mono from reference, or simplify to two fonts?).
-- Project data source (manual JSON in repo vs GitHub API at build time).
-- Headshot / avatar strategy (photo, monogram, abstract logo, none).
-- Project feature priority — which 2–3 projects get hero treatment in the Projects section (BasePaint Assist, BasePaint Plugin (hackathon winner), CSE Classroom).
-- Section transition style (Framer Motion `AnimatePresence`, scroll-triggered parallax via `useScroll`, CSS scroll-snap, route-based fade).
-- Component boundaries — what becomes a reusable primitive (Section shell? Card? Button? Badge? Skill chip?).
-- Contact method — static links (email / LinkedIn / GitHub) vs contact form (which needs a backend decision).
-- Final deployment URL — pick a fresh Vercel preview slug (e.g. `mrkjyqnt-portfolio-prototype.vercel.app`) until a permanent URL is decided.
+- Final deployment URL (Vercel preview slug, custom domain) — addressed by [Issue #6](../../issues/6) (build final portfolio + production polish).
+- OG image + meta tags for social sharing (deferred to a polish ticket).
+- Resume download — implemented as a `↓ Resume` ghost button in the hero (links to `Resume - Quinto.pdf` in repo). If hosting the PDF elsewhere becomes a need, that's a separate ticket.
 
 ## Out of scope
 
-- The final portfolio build itself — separate effort, informed by the prototype's architecture decisions.
+- The final portfolio build itself — separate effort, informed by the prototype's architecture decisions. **Now that VariantB is chosen, [Issue #6](../../issues/6) covers this.**
 - Backend services (contact form backend, form validation, rate-limiting).
 - Custom domain registration.
 - Analytics / monitoring / SEO tuning beyond basic OG tags.

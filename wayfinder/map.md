@@ -25,17 +25,18 @@ A working prototype of Mark Jay Sarcia Quinto's portfolio (full single-page, all
 - [Section shapes + avatar + project priority locked](../../issues/2) — avatar = existing GitHub B&W photo. Projects order = Plugin → Classroom → Assist (basepaint-lite out). 6 section shapes: Hero typewriter + 2 CTAs · About 2-col + chips · Experience timeline · Projects 3-card grid · Skills 2×2 chip grid (no skill bars) · Contact card + status badge. Motion: `whileInView` stagger, hover lift, no parallax.
 - [3-variant prototype built on `prototype/variants` branch](../../issues/4) — A = Linear Stack (single column, generous spacing) · B = Bento Mosaic (varied tile sizes, emerald/violet accents) · C = Editorial Asymmetric (serif italics, magazine numbers, full-bleed contact). Switch via `?variant=A|B|C` + bottom-center pill + ←/→ arrows. By-products on main: `src/data/` content + `card`/`badge`/`separator`/`avatar` shadcn primitives. Winner folds into main, throwaway branch deletes.
 - **[DECISION] VariantB (Plain Pro) chosen as the winner** — light mode default + dark mode toggle, refined typography, section numbers in primary color, project numbering `01 / 03`, tech chips with brand icons (SiClaude / SiPython / SiJavascript / SiTypescript / SiNextdotjs / SiVercel / SiHtml5 / SiCss / SiDotnet + Lucide fallbacks), Trophy icon for hackathon, `ghchart.rshah.org` GitHub graph (with `dark:invert dark:hue-rotate-180`), `Present` for the current role, Tooltip on every skill chip and project link, project cards get a left-border accent on hover. Folder structure: `src/components/sections/*` to be extracted from `src/prototype/VariantB.tsx`.
+- [Production portfolio folded into main + throwaway branch deleted](../../issues/6) — VariantB split into `src/components/sections/{hero,about,experience,projects,skills,what-i-work-on,github,contact,section-label}.tsx`, prototype scaffolding removed, shadcn Tooltip added, `react-icons` added, `main.tsx` wraps in TooltipProvider. `pnpm run build` clean (152 KB JS gzipped). `prototype/variants` branch deleted from origin.
 - [8 portfolio patterns + 8 "moves to consider"](tickets/11-research-portfolio-patterns.md) — staggered hero reveal, typewriter headline, Lenis smooth scroll, tag-driven project cloud, pinned horizontal strip, CSS marquee divider, numbered scroll rail, custom magnetic cursor. Suggested prototype default: stagger + typewriter + marquee divider.
 
 ## Not yet specified
 
-- Final deployment URL (Vercel preview slug, custom domain) — addressed by [Issue #6](../../issues/6) (build final portfolio + production polish).
+- Vercel deployment — push to `main` should trigger an auto-deploy. Needs verification: does the deployed URL serve both light + dark modes, GitHub graph loads, all links open in new tabs? Open a follow-up ticket if anything breaks.
 - OG image + meta tags for social sharing (deferred to a polish ticket).
 - Resume download — implemented as a `↓ Resume` ghost button in the hero (links to `Resume - Quinto.pdf` in repo). If hosting the PDF elsewhere becomes a need, that's a separate ticket.
 
 ## Out of scope
 
-- The final portfolio build itself — separate effort, informed by the prototype's architecture decisions. **Now that VariantB is chosen, [Issue #6](../../issues/6) covers this.**
+- ~~The final portfolio build itself — separate effort, informed by the prototype's architecture decisions.~~ **Resolved by [Issue #6](../../issues/6).**
 - Backend services (contact form backend, form validation, rate-limiting).
 - Custom domain registration.
 - Analytics / monitoring / SEO tuning beyond basic OG tags.

@@ -29,11 +29,11 @@ const DIRECTIONS: { x: number; y: number }[] = [
  *     the last tick (1-tick delay per segment). The body forms a connected
  *     chain of BLOCK-sized squares — not separated dots, not overlapping.
  *   - The snake walks in a straight line, periodically picks a new
- *     cardinal direction, and TELEPORTS through every viewport edge —
- *     reappears on the opposite side (toroidal wrap).
- *   - The snake's position is page-anchored: subtracts `window.scrollY`
- *     each render so the snake stays anchored to the page content (it
- *     scrolls out of view as the user scrolls, not pinned to the viewport).
+ *     cardinal direction, and TELEPORTS through every edge of the page —
+ *     reappears on the opposite side (toroidal wrap on the entire PAGE,
+ *     not just the viewport). The snake is "aware of the whole page",
+ *     so when the user scrolls the snake scrolls with the page (offset by
+ *     scrollX/scrollY each render) rather than staying glued to the view.
  *
  * Tunables (top of file):
  *   - BLOCK          size of each cell (also the per-tick movement)
@@ -51,7 +51,7 @@ export function Cursor() {
   const lastTickAt = useRef(0)
   const dirIdx = useRef(0) // initial heading: right
   const nextTurnAt = useRef(0) // when the snake next picks a new direction
-  const scrollY = useRef(0) // current scrollY offset for page-anchoring
+  const scroll = useRef({ x: 0, y: 0 }) // current scroll offset
 
   useEffect(() => {
     disabled.current = window.matchMedia(
@@ -62,8 +62,7 @@ export function Cursor() {
   useEffect(() => {
     if (disabled.current) return
 
-    // Seed on the 18-px grid, snapped to top-left so the snake visibly
-    // walks across the screen rather than starting at the cursor.
+    // Seed on the 18-px grid near the top of the page.
     const startX = BLOCK * 4
     const startY = BLOCK * 4
     for (let i = 0; i < LENGTH; i++) {
@@ -90,25 +89,32 @@ export function Cursor() {
       // block collapses onto the head — snake becomes a single dot.
       const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
 
-      // Head moves one BLOCK in its current direction (toroidal wrap).
+      // Page-aware bounds: snake wraps around the entire document, not just
+      // the current viewport. scrollWidth/scrollHeight covers the full page
+      // content even past the initial fold.
+      const w = Math.max(
+        document.documentElement.scrollWidth,
+        window.innerWidth
+      )
+      const h = Math.max(
+        document.documentElement.scrollHeight,
+        window.innerHeight
+      )
+
+      // Head moves one BLOCK in its current direction (page toroidal wrap).
       const head = positions.current[LENGTH - 1]!
       const dir = DIRECTIONS[dirIdx.current]!
-      head.x = (head.x + dir.x * BLOCK + window.innerWidth) % window.innerWidth
-      head.y = (head.y + dir.y * BLOCK + window.innerHeight) % window.innerHeight
+      head.x = (head.x + dir.x * BLOCK + w) % w
+      head.y = (head.y + dir.y * BLOCK + h) % h
 
       // Body trails: each block takes the position of the block IN FRONT
-      // of it from BEFORE this tick. block[0] takes what block[1] was
-      // (head's old position for LENGTH=5 means block[L-2] takes the old
-      // head cell; each earlier block takes the next cell up the chain).
+      // of it from BEFORE this tick.
       for (let i = 0; i < LENGTH - 1; i++) {
         positions.current[i] = snapshot[i + 1]
       }
 
-      // Wrap EVERY block (not just the head) so the body that was near the
-      // edge also teleports through with the head — keeps the chain
-      // visually connected across wraps (no "tail disappears" when wrapping).
-      const w = window.innerWidth
-      const h = window.innerHeight
+      // Wrap every block within the page bounds so the whole chain
+      // teleports together (no "tail disappears" on wrap).
       for (let i = 0; i < LENGTH; i++) {
         const p = positions.current[i]!
         if (p.x < 0) p.x += w
@@ -117,8 +123,8 @@ export function Cursor() {
         else if (p.y >= h) p.y -= h
       }
 
-      // Periodic random direction change (every TURN_MIN..TURN_MIN+TURN_RAND
-      // ms) so the snake doesn't loop forever in a straight line.
+      // Periodic random direction change so the snake doesn't loop forever
+      // in a straight line.
       if (performance.now() >= nextTurnAt.current) {
         pickRandomTurn()
         nextTurnAt.current =
@@ -127,15 +133,17 @@ export function Cursor() {
     }
 
     function render() {
-      // Subtract scrollY so the snake stays anchored to the page content.
-      // As the user scrolls, the snake moves with the page (it scrolls
-      // out of view), not pinned to the viewport.
-      const ys = scrollY.current
+      // Subtract scroll so the snake moves WITH the page (it scrolls
+      // out of view as the user scrolls), not pinned to the viewport.
+      // The snake's logical position lives in page coordinates; we shift
+      // its visual position by -scroll so it appears stuck to the page.
+      const sx = scroll.current.x
+      const sy = scroll.current.y
       for (let i = 0; i < LENGTH; i++) {
         const el = refs.current[i]
         const p = positions.current[i]
         if (!el || !p) continue
-        el.style.transform = `translate3d(${p.x}px, ${p.y - ys}px, 0)`
+        el.style.transform = `translate3d(${p.x - sx}px, ${p.y - sy}px, 0)`
       }
     }
 
@@ -162,7 +170,8 @@ export function Cursor() {
     })
 
     const onScroll = () => {
-      scrollY.current = window.scrollY
+      scroll.current.x = window.scrollX
+      scroll.current.y = window.scrollY
     }
     window.addEventListener("scroll", onScroll, { passive: true })
 

@@ -1,29 +1,25 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 12
+const LENGTH = 16 // number of blocks
 const BLOCK = 14 // px — size of each square segment
 
-// Snake physics: every block eases toward the target in front of it each
-// frame. The head chases the cursor (not snaps to it); each body block
-// chases the block in front of it, lagging more as you go down the tail.
-const HEAD_LAG = 0.18 // head eases toward cursor
-const BODY_LAG = 0.14 // each body block eases toward the block in front
-
-type Pt = { x: number; y: number }
-
 /**
- * Nokia-Snake-style trailing cursor.
- *  - Square blocks (no rounding) at a fixed grid scale
- *  - Head (segment 0) chases the real cursor with light easing
- *  - Each subsequent block eases toward the previous block, producing
- *    the classic snake-body lag
- *  - All blocks rendered on a single rAF loop, GPU-friendly (just transforms)
- *  - Hidden on `prefers-reduced-motion` and on viewports < md (touch)
- *  - Hidden when the cursor leaves the window
+ * Nokia-Snake cursor. Pixel-by-pixel movement:
+ *  - Each frame the HEAD moves toward the cursor at a fixed step (px/frame)
+ *  - Each subsequent block takes the previous block's position (1-frame delay)
+ *  - Result: a chain of blocks that visibly chases the cursor at a
+ *    controlled speed, never glued to it, never snapping.
+ *
+ * Hidden when:
+ *  - `prefers-reduced-motion: reduce`
+ *  - the cursor leaves the window
+ *  - the viewport is narrower than `md` (touch)
  */
+const STEP = 9 // pixels per frame the head advances toward the cursor
+
 export function Cursor() {
-  const positions = useRef<Pt[]>(
-    Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
+  const positions = useRef(
+    Array.from({ length: LENGTH }, () => ({ x: -9999, y: -9999 }))
   )
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const disabled = useRef(false)
@@ -39,26 +35,29 @@ export function Cursor() {
 
     let active = false
     let raf = 0
-    const cursor: Pt = { x: -9999, y: -9999 }
+    const cursor = { x: 0, y: 0 }
 
     const tick = () => {
-      // Snake physics:
-      //   - Head chases the cursor with HEAD_LAG easing (does NOT snap to
-      //     cursor — that's what made it look glued before)
-      //   - Each body block chases the block in front of it with BODY_LAG
-      //   - The chain produces the classic trailing-body lag — each segment
-      //     is a few frames behind the one ahead, so the snake visibly
-      //     stretches behind the cursor
-      const head = positions.current[0]!
-      head.x += (cursor.x - head.x) * HEAD_LAG
-      head.y += (cursor.y - head.y) * HEAD_LAG
-      for (let i = 1; i < LENGTH; i++) {
-        const target = positions.current[i - 1]!
-        const cur = positions.current[i]!
-        cur.x += (target.x - cur.x) * BODY_LAG
-        cur.y += (target.y - cur.y) * BODY_LAG
+      const head = positions.current[LENGTH - 1]!
+      const dx = cursor.x - head.x
+      const dy = cursor.y - head.y
+      const dist = Math.hypot(dx, dy)
+
+      if (dist > 0) {
+        // Move head at most STEP pixels toward the cursor this frame.
+        // Math.min with STEP keeps it from overshooting when very close.
+        const step = Math.min(STEP, dist)
+        head.x += (dx / dist) * step
+        head.y += (dy / dist) * step
       }
 
+      // Shift the array: each block inherits the position of the one in
+      // front of it, with a 1-frame delay. This is the classic snake trail.
+      for (let i = 0; i < LENGTH - 1; i++) {
+        positions.current[i] = positions.current[i + 1]!
+      }
+
+      // Render every block at its current position.
       for (let i = 0; i < LENGTH; i++) {
         const el = refs.current[i]
         const p = positions.current[i]
@@ -74,13 +73,12 @@ export function Cursor() {
       cursor.y = e.clientY
       if (!active) {
         active = true
-        // Seed the snake at the cursor so it doesn't sweep across on first move
+        // Seed the snake at the cursor so it doesn't sweep across the screen
         for (let i = 0; i < LENGTH; i++) {
           positions.current[i] = { x: cursor.x, y: cursor.y }
         }
-        for (let i = 0; i < LENGTH; i++) {
-          const el = refs.current[i]
-          if (el) el.style.opacity = i === 0 ? "1" : String(1 - i / LENGTH)
+        for (const el of refs.current) {
+          if (el) el.style.opacity = "1"
         }
         raf = requestAnimationFrame(tick)
       }
@@ -106,30 +104,22 @@ export function Cursor() {
 
   return (
     <>
-      {Array.from({ length: LENGTH }).map((_, i) => {
-        // Head is primary; each subsequent block fades. Slight color shift
-        // head → tail: head is full foreground, tail nudges toward primary.
-        const isHead = i === 0
-        return (
-          <div
-            key={i}
-            aria-hidden
-            ref={(el) => {
-              refs.current[i] = el
-            }}
-            className={
-              "pointer-events-none fixed left-0 top-0 hidden md:block " +
-              (isHead ? "bg-foreground" : "bg-foreground/70")
-            }
-            style={{
-              width: `${BLOCK}px`,
-              height: `${BLOCK}px`,
-              opacity: 0,
-              zIndex: 100 + (LENGTH - i),
-            }}
-          />
-        )
-      })}
+      {Array.from({ length: LENGTH }).map((_, i) => (
+        <div
+          key={i}
+          aria-hidden
+          ref={(el) => {
+            refs.current[i] = el
+          }}
+          className="pointer-events-none fixed left-0 top-0 hidden rounded-sm bg-foreground md:block"
+          style={{
+            width: `${BLOCK}px`,
+            height: `${BLOCK}px`,
+            opacity: 0,
+            zIndex: 100 + (LENGTH - i),
+          }}
+        />
+      ))}
     </>
   )
 }

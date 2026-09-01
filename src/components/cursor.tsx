@@ -1,14 +1,13 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 23 // number of blocks (head + 5 more than the first pass = 23)
-const BLOCK = 14 // px per block (cell size)
+const LENGTH = 5 // total blocks (head + 4 tail)
+const BLOCK = 18 // px per block (chunkier so the chain is easy to see)
 
 // Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.
 const TICK_MS = 110
-const EDGE_MARGIN = BLOCK * 2 // turn before hitting the edge
 
-// 4 cardinal directions only (no diagonals). Each tick moves the head by
-// BLOCK pixels in one of these directions.
+// 4 cardinal directions only (no diagonals). The snake keeps one heading
+// and wraps toroidally — no turning.
 const DIRECTIONS: { x: number; y: number }[] = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -25,14 +24,14 @@ const DIRECTIONS: { x: number; y: number }[] = [
  *   - Each body block takes the position the block in front of it had at
  *     the last tick (1-tick delay per segment). The body forms a connected
  *     chain of BLOCK-sized squares — not separated dots, not overlapping.
- *   - The snake walks in a straight line until the head is within
- *     EDGE_MARGIN of a viewport edge, then turns 90° (no random turns).
+ *   - The snake walks in a straight line and TELEPORTS through every
+ *     viewport edge — reappears on the opposite side (toroidal wrap).
+ *     No turning.
  *
  * Tunables (top of file):
  *   - BLOCK          size of each cell (also the per-tick movement)
  *   - LENGTH         number of blocks in the snake
  *   - TICK_MS        time between each cell-step
- *   - EDGE_MARGIN    distance from any viewport edge that triggers a turn
  */
 export function Cursor() {
   const positions = useRef(
@@ -52,9 +51,9 @@ export function Cursor() {
   useEffect(() => {
     if (disabled.current) return
 
-    // Seed on the 14-px grid, snapped to top-left so the snake visibly
+    // Seed on the 18-px grid, snapped to top-left so the snake visibly
     // walks across the screen rather than starting at the cursor.
-    const startX = BLOCK * 6
+    const startX = BLOCK * 4
     const startY = BLOCK * 4
     for (let i = 0; i < LENGTH; i++) {
       positions.current[i] = { x: startX + i * BLOCK, y: startY }
@@ -62,50 +61,20 @@ export function Cursor() {
 
     let raf = 0
 
-    function pickTurnFromEdge() {
-      const head = positions.current[LENGTH - 1]!
-      const dx = window.innerWidth / 2 - head.x
-      const dy = window.innerHeight / 2 - head.y
-      const sx = Math.sign(dx)
-      const sy = Math.sign(dy)
-      // Score each direction by how much it heads toward viewport center.
-      const candidates = DIRECTIONS.map((d, i) => ({
-        i,
-        score: d.x * sx + d.y * sy,
-      }))
-      candidates.sort((a, b) => b.score - a.score)
-      // Pick from the top 2 so the snake doesn't always come straight back
-      // to center (a touch of randomness on the edge turn).
-      const chosen = candidates[Math.floor(Math.random() * 2)].i
-      const opposite = (dirIdx.current + 2) % 4
-      dirIdx.current = chosen === opposite ? (chosen + 1) % 4 : chosen
-    }
-
     function step() {
       // One Nokia-style step: head moves BLOCK pixels in its current
       // direction; each body block inherits the previous block's cell.
       const head = positions.current[LENGTH - 1]!
       const dir = DIRECTIONS[dirIdx.current]!
-      head.x += dir.x * BLOCK
-      head.y += dir.y * BLOCK
+
+      // Toroidal wrap: if the head crosses an edge, it reappears on the
+      // opposite side. Body blocks naturally follow because they copy the
+      // previous cell's position (which itself wrapped).
+      head.x = (head.x + dir.x * BLOCK + window.innerWidth) % window.innerWidth
+      head.y = (head.y + dir.y * BLOCK + window.innerHeight) % window.innerHeight
 
       for (let i = 0; i < LENGTH - 1; i++) {
         positions.current[i] = positions.current[i + 1]!
-      }
-
-      // Turn only when the head's bounding rect crosses EDGE_MARGIN of any
-      // viewport edge. No random or time-based turns.
-      const headEl = refs.current[LENGTH - 1]
-      if (headEl) {
-        const rect = headEl.getBoundingClientRect()
-        if (
-          rect.left < EDGE_MARGIN ||
-          rect.right > window.innerWidth - EDGE_MARGIN ||
-          rect.top < EDGE_MARGIN ||
-          rect.bottom > window.innerHeight - EDGE_MARGIN
-        ) {
-          pickTurnFromEdge()
-        }
       }
     }
 

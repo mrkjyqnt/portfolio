@@ -1,20 +1,19 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 5 // total blocks (head + 4 tail)
+const LENGTH = 4 // total blocks (head + 3 tail — less lag, tighter chain)
 const BLOCK = 18 // px per block (chunkier so the chain is easy to see)
+
+// Fixed pixels per tick the head advances toward its target. Constant
+// step (not eased) so the snake moves at a steady rate — doesn't speed
+// up at long distances and crawl when close.
+const STEP = 2
 
 // Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.
 const TICK_MS = 110
 
-// If true, the head eases toward the user's cursor instead of walking in
-// its own direction. Easy to flip back when the user wants the original
-// wandering behavior.
+// If true, the head chases the user's cursor instead of walking in its
+// own direction. Easy to flip back to the wandering snake.
 const SNAKE_CHASES_CURSOR = true
-
-// When chasing the cursor, how fast each block moves toward its target
-// each tick. 0.25 = 25% of remaining distance per tick — smooth pixel-by-
-// pixel motion (no instant snapping to the target).
-const CHASE_EASE = 0.25
 
 // The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
 // (so it doesn't loop forever in a straight line — it "thinks" and turns).
@@ -55,9 +54,10 @@ const DIRECTIONS: { x: number; y: number }[] = [
  *   - TICK_MS        time between each cell-step
  *   - TURN_MIN_MS    minimum time between random direction changes
  *   - TURN_RAND_MS   additional random delay on top of TURN_MIN_MS
- *   - SNAKE_CHASES_CURSOR   boolean — true: head eases toward cursor;
+ *   - SNAKE_CHASES_CURSOR   boolean — true: head chases cursor;
  *                             false (default): walks in its own direction
- *   - CHASE_EASE     0..1 — per-tick fraction toward cursor when chasing
+ *   - STEP           px per tick each block advances toward its target
+ *                     (constant speed, no easing)
  */
 export function Cursor() {
   const positions = useRef(
@@ -114,24 +114,32 @@ export function Cursor() {
       )
 
       // Two movement modes:
-      //   - SNAKE_CHASES_CURSOR (smooth): head and every body block ease
-      //     toward their target each tick → true pixel-by-pixel motion.
-      //     Block i eases toward the previous position of block i+1
-      //     (which itself just moved), so the chain stretches behind.
+      //   - SNAKE_CHASES_CURSOR: every block (head AND body) moves at a
+      //     fixed STEP px/tick toward its target (head → cursor, body →
+      //     block in front). Constant speed, no easing — pixel by pixel,
+      //     no rushing.
       //   - default (Nokia-step): head moves one BLOCK per tick, each
       //     body block takes the previous tick's position of the block
       //     in front — discrete steps.
       if (SNAKE_CHASES_CURSOR && cursor.current.active) {
         const head = positions.current[LENGTH - 1]!
-        head.x += (cursor.current.x - head.x) * CHASE_EASE
-        head.y += (cursor.current.y - head.y) * CHASE_EASE
-        // Each block eases toward the position of the block in front of
-        // it (the chain stretches toward the cursor with the same ease).
+        const hdx = cursor.current.x - head.x
+        const hdy = cursor.current.y - head.y
+        const hdist = Math.hypot(hdx, hdy)
+        if (hdist > 0) {
+          head.x += (hdx / hdist) * STEP
+          head.y += (hdy / hdist) * STEP
+        }
         for (let i = LENGTH - 2; i >= 0; i--) {
           const cur = positions.current[i]!
           const next = positions.current[i + 1]!
-          cur.x += (next.x - cur.x) * CHASE_EASE
-          cur.y += (next.y - cur.y) * CHASE_EASE
+          const dx = next.x - cur.x
+          const dy = next.y - cur.y
+          const dist = Math.hypot(dx, dy)
+          if (dist > 0) {
+            cur.x += (dx / dist) * STEP
+            cur.y += (dy / dist) * STEP
+          }
         }
       } else {
         // Snapshot before moving so the body shift uses the previous tick's

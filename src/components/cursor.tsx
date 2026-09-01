@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 18 // number of blocks
+const LENGTH = 23 // number of blocks (head + 5 more than the first pass = 23)
 const BLOCK = 14 // px per block (cell size)
 
 // Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.

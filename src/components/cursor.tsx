@@ -85,19 +85,23 @@ export function Cursor() {
     }
 
     function step() {
-      // One Nokia-style step: head moves BLOCK pixels in its current
-      // direction; each body block inherits the previous block's cell.
+      // Snapshot the positions BEFORE the head moves. Otherwise the body
+      // shift reads the head's NEW position (just assigned) and every
+      // block collapses onto the head — snake becomes a single dot.
+      const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
+
+      // Head moves one BLOCK in its current direction (toroidal wrap).
       const head = positions.current[LENGTH - 1]!
       const dir = DIRECTIONS[dirIdx.current]!
-
-      // Toroidal wrap: if the head crosses an edge, it reappears on the
-      // opposite side. Body blocks naturally follow because they copy the
-      // previous cell's position (which itself wrapped).
       head.x = (head.x + dir.x * BLOCK + window.innerWidth) % window.innerWidth
       head.y = (head.y + dir.y * BLOCK + window.innerHeight) % window.innerHeight
 
+      // Body trails: each block takes the position of the block IN FRONT
+      // of it from BEFORE this tick. block[0] takes what block[1] was
+      // (head's old position for LENGTH=5 means block[L-2] takes the old
+      // head cell; each earlier block takes the next cell up the chain).
       for (let i = 0; i < LENGTH - 1; i++) {
-        positions.current[i] = positions.current[i + 1]!
+        positions.current[i] = snapshot[i + 1]
       }
 
       // Wrap EVERY block (not just the head) so the body that was near the

@@ -1,19 +1,16 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 22 // number of blocks
-const BLOCK = 14 // px — each square segment
-const STEP = 7 // px per frame the head advances (half a block, so blocks overlap = connected snake)
+const LENGTH = 20 // number of blocks
+const BLOCK = 12 // px — each square segment
+const STEP = 2 // px per frame the head advances — slow, pixel-step
 
-// 8 cardinal + diagonal directions as unit vectors.
+// 4 cardinal directions only (no diagonals). The snake walks in straight
+// lines until it hits a viewport edge, then turns. No random turns.
 const DIRECTIONS: { x: number; y: number }[] = [
   { x: 1, y: 0 },
-  { x: 1, y: 1 },
   { x: 0, y: 1 },
-  { x: -1, y: 1 },
   { x: -1, y: 0 },
-  { x: -1, y: -1 },
   { x: 0, y: -1 },
-  { x: 1, y: -1 },
 ]
 
 /**
@@ -24,9 +21,7 @@ const DIRECTIONS: { x: number; y: number }[] = [
  *
  * Tunables (top of file):
  *   - BLOCK          segment size
- *   - STEP           head speed (px/frame)
- *   - TURN_MIN_MS    minimum time between random turns
- *   - TURN_RAND_MS   additional random delay
+ *   - STEP           head speed (px/frame) — small = slow
  *   - EDGE_MARGIN    distance from any viewport edge that forces a turn
  *
  * Hidden when:
@@ -36,9 +31,7 @@ const DIRECTIONS: { x: number; y: number }[] = [
  * Mounts a `data-cursor=\"snake\"` flag on <html> so global CSS can hide
  * the OS cursor (only one pointer on screen — the snake).
  */
-const TURN_MIN_MS = 900
-const TURN_RAND_MS = 1800
-const EDGE_MARGIN = 80
+const EDGE_MARGIN = 60
 
 export function Cursor() {
   const positions = useRef(
@@ -66,8 +59,6 @@ export function Cursor() {
     let dirIdx = 0
 
     let raf = 0
-    let lastTurnAt = performance.now()
-    let nextTurnIn = TURN_MIN_MS + Math.random() * TURN_RAND_MS
 
     function pickTurnFromEdge() {
       const head = positions.current[LENGTH - 1]!
@@ -82,20 +73,9 @@ export function Cursor() {
       }))
       candidates.sort((a, b) => b.score - a.score)
       const chosen = candidates[Math.floor(Math.random() * 2)].i
-      const opposite = (dirIdx + 4) % 8
-      if (chosen === opposite) dirIdx = (chosen + 1) % 8
+      const opposite = (dirIdx + 2) % 4
+      if (chosen === opposite) dirIdx = (chosen + 1) % 4
       else dirIdx = chosen
-    }
-
-    function pickRandomTurn() {
-      const opposite = (dirIdx + 4) % 8
-      let next = Math.floor(Math.random() * 8)
-      let tries = 0
-      while ((next === dirIdx || next === opposite) && tries < 8) {
-        next = Math.floor(Math.random() * 8)
-        tries++
-      }
-      dirIdx = next
     }
 
     const tick = () => {
@@ -110,26 +90,19 @@ export function Cursor() {
         positions.current[i] = positions.current[i + 1]!
       }
 
-      // Two turn triggers: time-based random, and edge-based forced.
-      const now = performance.now()
-      if (now - lastTurnAt >= nextTurnIn) {
-        pickRandomTurn()
-        lastTurnAt = now
-        nextTurnIn = TURN_MIN_MS + Math.random() * TURN_RAND_MS
-      } else {
-        const headEl = refs.current[LENGTH - 1]
-        if (headEl) {
-          const rect = headEl.getBoundingClientRect()
-          if (
-            rect.left < EDGE_MARGIN ||
-            rect.right > window.innerWidth - EDGE_MARGIN ||
-            rect.top < EDGE_MARGIN ||
-            rect.bottom > window.innerHeight - EDGE_MARGIN
-          ) {
-            pickTurnFromEdge()
-            lastTurnAt = now
-            nextTurnIn = TURN_MIN_MS + Math.random() * TURN_RAND_MS
-          }
+      // One turn trigger: edge-based. The snake walks in a straight line
+      // until it's near a viewport edge, then turns. No random time-based
+      // turns — those made it feel like it was bouncing around.
+      const headEl = refs.current[LENGTH - 1]
+      if (headEl) {
+        const rect = headEl.getBoundingClientRect()
+        if (
+          rect.left < EDGE_MARGIN ||
+          rect.right > window.innerWidth - EDGE_MARGIN ||
+          rect.top < EDGE_MARGIN ||
+          rect.bottom > window.innerHeight - EDGE_MARGIN
+        ) {
+          pickTurnFromEdge()
         }
       }
 

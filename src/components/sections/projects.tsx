@@ -5,6 +5,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Trophy } from "lucide-react"
+import { Link } from "react-router-dom"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { projects } from "@/data/projects"
 import { SectionLabel } from "./section-label"
 import { FadeUp } from "@/components/motion/fade-up"
@@ -130,7 +133,16 @@ export function Projects() {
                   </Badge>
                 ))}
               </div>
-              <div className="flex gap-4 pt-1 text-sm">
+              <div className="flex flex-wrap items-center gap-4 pt-1 text-sm">
+                <Link
+                  to={`/projects/${p.slug}`}
+                  className={cn(
+                    buttonVariants({ variant: "link", size: "sm" }),
+                    "text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring px-0"
+                  )}
+                >
+                  Read more →
+                </Link>
                 <ProjectLink href={p.githubUrl} label="GitHub" />
                 {p.liveUrl && <ProjectLink href={p.liveUrl} label="Live" />}
               </div>

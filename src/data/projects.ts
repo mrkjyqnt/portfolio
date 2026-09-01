@@ -1,4 +1,5 @@
 export type Project = {
+  slug: string
   title: string
   hook: string
   description: string
@@ -10,6 +11,7 @@ export type Project = {
 
 export const projects: Project[] = [
   {
+    slug: "basepaint-plugin",
     title: "BasePaint Plugin",
     hook: "Won BasePaint Hackathon 2026 — \"For Artists\" category",
     description:
@@ -20,6 +22,7 @@ export const projects: Project[] = [
     highlight: "hackathon-2026",
   },
   {
+    slug: "cse-classroom",
     title: "CSE Classroom",
     hook: "Lesson-aware AI tutor",
     description:
@@ -29,6 +32,7 @@ export const projects: Project[] = [
     liveUrl: "https://cse-classroom.vercel.app",
   },
   {
+    slug: "basepaint-assist",
     title: "BasePaint Assist",
     hook: "Agentic assistant — slash commands route into real BasePaint actions",
     description:

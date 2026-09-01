@@ -1,5 +1,6 @@
 import type { ReactElement } from "react"
 import { render } from "@testing-library/react"
+import { MemoryRouter } from "react-router-dom"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
@@ -13,7 +14,9 @@ export function renderSection(
 ) {
   return render(
     <ThemeProvider defaultTheme={options.defaultTheme ?? "light"}>
-      <TooltipProvider delay={0}>{ui}</TooltipProvider>
+      <TooltipProvider delay={0}>
+        <MemoryRouter>{ui}</MemoryRouter>
+      </TooltipProvider>
     </ThemeProvider>
   )
 }

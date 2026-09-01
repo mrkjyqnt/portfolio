@@ -51,6 +51,11 @@ export function Cursor() {
   const positions = useRef(
     Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
   )
+  // Each block's cell at the START of the current tick. Used to interpolate
+  // the render position smoothly across the tick.
+  const prevBlocks = useRef(
+    Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
+  )
   // History of the head's cell, one entry per tick (capped at LENGTH-1).
   // Block N-1 (just behind the head) takes head[1-tick-ago], block N-2
   // takes head[2-ticks-ago], etc. This makes the body stretch out from the
@@ -199,6 +204,14 @@ export function Cursor() {
       head.x += wrapX
       head.y += wrapY
 
+      // Snapshot every block's CURRENT cell into prevBlocks BEFORE the head
+      // moves and the body shifts — the render function will interpolate
+      // from prevBlocks[i] to positions.current[i] across the tick.
+      for (let i = 0; i < LENGTH; i++) {
+        prevBlocks.current[i]!.x = positions.current[i]!.x
+        prevBlocks.current[i]!.y = positions.current[i]!.y
+      }
+
       // Body: block L-1-i takes head position from (i+1) ticks ago, with
       // the same wrap delta applied so the chain shape is preserved across
       // wraps. Using a history queue (instead of a 1-tick snapshot) is the
@@ -230,24 +243,19 @@ export function Cursor() {
     }
 
     function render(progress: number) {
-      // The head smoothly interpolates from its previous cell to its current
-      // cell over the tick duration. The body snaps to its current cell
-      // (it was already placed there by step()).
+      // Every block smoothly interpolates from prevBlocks[i] (its cell at
+      // the start of this tick) to positions[i] (its cell now). The whole
+      // chain slides smoothly between cells every tick.
       const sx = scroll.current.x
       const sy = scroll.current.y
-      const headEl = refs.current[LENGTH - 1]
-      const headCur = positions.current[LENGTH - 1]!
-      if (headEl) {
-        const lastHead = headHistory.current[0] ?? headCur
-        const x = lastHead.x + (headCur.x - lastHead.x) * progress - sx
-        const y = lastHead.y + (headCur.y - lastHead.y) * progress - sy
-        headEl.style.transform = `translate3d(${x}px, ${y}px, 0)`
-      }
-      for (let i = 0; i < LENGTH - 1; i++) {
+      for (let i = 0; i < LENGTH; i++) {
         const el = refs.current[i]
+        const prev = prevBlocks.current[i]
         const cur = positions.current[i]
-        if (!el || !cur) continue
-        el.style.transform = `translate3d(${cur.x - sx}px, ${cur.y - sy}px, 0)`
+        if (!el || !prev || !cur) continue
+        const x = prev.x + (cur.x - prev.x) * progress - sx
+        const y = prev.y + (cur.y - prev.y) * progress - sy
+        el.style.transform = `translate3d(${x}px, ${y}px, 0)`
       }
     }
 

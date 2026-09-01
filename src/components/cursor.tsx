@@ -55,6 +55,7 @@ export function Cursor() {
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
   const dirIdx = useRef(0) // initial heading: right
+  const orbitStep = useRef(0) // cycles through DIRECTIONS when circling the cursor
   const nextTurnAt = useRef(0)
   const scroll = useRef({ x: 0, y: 0 })
   const cursor = useRef({ x: 0, y: 0, active: false })
@@ -109,29 +110,29 @@ export function Cursor() {
       const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
 
       // Decide the head's step this tick:
-      //   - CHASE: pick the cardinal axis with the larger delta to the
-      //     cursor and step one cell toward it. Ties resolved randomly
-      //     between the two axes. Cursor coords are converted to grid
-      //     cells first so the chase happens in cells, not pixels.
+      //   - CHASE: head steps one cell toward the cursor. If it's already
+      //     on the cursor's cell, it ORBITS — cycles through the 4 cardinal
+      //     directions so the snake circles around the cursor instead of
+      //     sitting on it.
       //   - wander: step in the current <DIRECTIONS> heading.
       const head = positions.current[LENGTH - 1]!
       let stepX = 0
       let stepY = 0
       if (SNAKE_CHASES_CURSOR && cursor.current.active) {
-        // Snap the cursor to the grid so the chase is in cell units.
         const tgx = Math.round(cursor.current.x / BLOCK) * BLOCK
         const tgy = Math.round(cursor.current.y / BLOCK) * BLOCK
         const dx = tgx - head.x
         const dy = tgy - head.y
-        if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+        if (dx === 0 && dy === 0) {
+          // Head is on the cursor cell — circle around it.
+          orbitStep.current = (orbitStep.current + 1) % 4
+          const d = DIRECTIONS[orbitStep.current]!
+          stepX = d.x * BLOCK
+          stepY = d.y * BLOCK
+        } else if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
           stepX = Math.sign(dx) * BLOCK
         } else if (dy !== 0) {
           stepY = Math.sign(dy) * BLOCK
-        } else {
-          // On the target cell — pick a random axis to keep moving.
-          if (Math.random() < 0.5 && dx !== 0) stepX = Math.sign(dx) * BLOCK
-          else if (dy !== 0) stepY = Math.sign(dy) * BLOCK
-          else stepX = (Math.random() < 0.5 ? -1 : 1) * BLOCK
         }
       } else {
         const dir = DIRECTIONS[dirIdx.current]!

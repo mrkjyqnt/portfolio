@@ -1,10 +1,9 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 4 // total blocks (head + 3 tail — tight chain)
-const BLOCK = 20 // px per block (cell size — also the per-tick movement distance)
+const LENGTH = 5 // total blocks (head + 4 tail — tight stick)
+const BLOCK = 18 // px per block (cell size = per-tick movement distance)
 
-// Time between each cell-step. ~150 ms = ~6.5 moves/sec — readable but
-// not sluggish.
+// Time between each cell-step. ~150 ms = ~6.5 moves/sec.
 const TICK_MS = 150
 
 // The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
@@ -12,8 +11,8 @@ const TICK_MS = 150
 const TURN_MIN_MS = 3500
 const TURN_RAND_MS = 4000
 
-// If true, the head chases the user's cursor. If false (default), the
-// snake walks in its own direction on a grid.
+// If true, the head chases the user's cursor. If false, the snake
+// wanders (walks in its own direction).
 const SNAKE_CHASES_CURSOR = true
 
 // 4 cardinal directions only.
@@ -24,53 +23,37 @@ const DIRECTIONS: { x: number; y: number }[] = [
   { x: 0, y: -1 },
 ]
 
+type Pt = { x: number; y: number }
+
 /**
- * Autonomous pixelated snake on a fixed grid — Nokia-Snake mechanics:
- *  - The head occupies one grid cell. Each tick it advances ONE CELL in
- *    the current cardinal direction (BLOCK px).
- *  - Each body block occupies the cell the block in front of it occupied
- *    last tick (1-tick delay per segment). The whole snake is always on
- *    the grid.
- *  - In CHASE mode, the head moves one cell per tick in whichever
- *    cardinal direction most heads toward the cursor (whichever axis has
- *    the larger delta). Discrete, cell-per-cell movement — no easing,
- *    no pixel-by-pixel creep.
- *  - Snake is page-aware: wraps at document bounds (full page width /
- *    height) and renders with scrollX/scrollY subtracted so it scrolls
- *    with the page (out of view as the user scrolls).
- *
- * Tunables (top of file):
- *   - BLOCK          px per cell (= per-tick movement distance)
- *   - LENGTH         number of blocks in the snake
- *   - TICK_MS        time between each cell-step
- *   - TURN_MIN_MS    minimum time between random direction changes
- *   - TURN_RAND_MS   additional random delay
- *   - SNAKE_CHASES_CURSOR   boolean — chase mode vs wander mode
+ * Autonomous pixelated snake on a fixed grid. Classic Nokia-Snake
+ * physics, no over-engineering:
+ *  - One BLOCK per tick (cell-per-cell movement).
+ *  - Body = FIFO shift: each block takes the cell the block in front of
+ *    it occupied at the start of this tick. Body hugs the head with one
+ *    cell of lag — a connected chain that always moves together.
+ *  - Every frame interpolates each block from its previous cell to its
+ *    new cell so the whole chain glides smoothly between ticks.
+ *  - Toroidal wrap on page bounds; snake is page-anchored (renders
+ *    with scrollX/scrollY subtracted so it scrolls with the page).
+ *  - In chase mode, the head orbits the cursor cell in a 4-square loop
+ *    when it arrives there, instead of being dragged back each tick.
  */
 export function Cursor() {
-  const positions = useRef(
+  // positions[i] = each block's cell at the END of the current tick.
+  const positions = useRef<Pt[]>(
     Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
   )
-  // Each block's cell at the START of the current tick. Used to interpolate
-  // the render position smoothly across the tick.
-  const prevBlocks = useRef(
+  // prevBlocks[i] = each block's cell at the START of the current tick.
+  // The render function interpolates from prevBlocks[i] → positions[i].
+  const prevBlocks = useRef<Pt[]>(
     Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
   )
-  // History of the head's cell, one entry per tick (capped at LENGTH-1).
-  // Block N-1 (just behind the head) takes head[1-tick-ago], block N-2
-  // takes head[2-ticks-ago], etc. This makes the body stretch out from the
-  // head as a real Nokia snake — NOT collapse onto the head.
-  const headHistory = useRef<{ x: number; y: number }[]>([])
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
-  const dirIdx = useRef(0) // initial heading: right
-  // Orbit state: when the head reaches the cursor cell, the snake enters
-  // orbit mode — it cycles through 4 cardinal directions around the cursor
-  // (right → down → left → up → repeat) instead of being dragged back by
-  // the chase logic each tick. orbitCenter is the cursor cell at the
-  // moment orbit started; if the cursor moves off-center, orbit ends and
-  // chase resumes.
+  const dirIdx = useRef(0)
+  // Orbit state — see step() for the chase+orbit logic.
   const orbitStep = useRef(0)
   const orbiting = useRef(false)
   const orbitCenter = useRef({ x: 0, y: 0 })
@@ -94,16 +77,9 @@ export function Cursor() {
       x: Math.round(startX / BLOCK) * BLOCK,
       y: Math.round(startY / BLOCK) * BLOCK,
     }
-    positions.current[LENGTH - 1] = { x: headSeed.x, y: headSeed.y }
-    // Seed the history with the head's initial position so the body has
-    // something to reference on the first ticks.
-    for (let i = 0; i < LENGTH - 1; i++) {
-      headHistory.current.push({ x: headSeed.x, y: headSeed.y })
-    }
-    // Place the initial body as if the snake had been moving toward its
-    // initial heading (right) for LENGTH-1 ticks — gives a chain from the
-    // start.
-    for (let i = 0; i < LENGTH - 1; i++) {
+    // Lay the body out one cell apart behind the head, as if the snake
+    // had been moving toward (+x, 0) for LENGTH-1 ticks.
+    for (let i = 0; i < LENGTH; i++) {
       positions.current[i] = {
         x: headSeed.x - (LENGTH - 1 - i) * BLOCK,
         y: headSeed.y,
@@ -124,6 +100,14 @@ export function Cursor() {
     }
 
     function step() {
+      // Snapshot every block's CURRENT cell into prevBlocks so the render
+      // function can interpolate from each block's old cell to its new
+      // cell across the tick.
+      for (let i = 0; i < LENGTH; i++) {
+        prevBlocks.current[i]!.x = positions.current[i]!.x
+        prevBlocks.current[i]!.y = positions.current[i]!.y
+      }
+
       // Page bounds for wrap.
       const w = Math.max(
         document.documentElement.scrollWidth,
@@ -134,13 +118,11 @@ export function Cursor() {
         window.innerHeight
       )
 
-      // Decide the head's step this tick:
-      //   - CHASE + head on cursor cell: enter ORBIT mode. Head cycles
-      //     around the cursor's cell (right → down → left → up → repeat)
-      //     instead of being snapped back to the center each tick. Orbit
-      //     ends when the cursor leaves the orbit center.
-      //   - CHASE + head off cursor: head steps one cell toward cursor.
-      //   - wander: step in the current <DIRECTIONS> heading.
+      // Decide the head's step this tick.
+      //   - CHASE + head on cursor cell → orbit the cursor (4-square
+      //     loop around the cursor's cell).
+      //   - CHASE + head off cursor → step one cell toward cursor.
+      //   - wander → step in the current heading direction.
       const head = positions.current[LENGTH - 1]!
       let stepX = 0
       let stepY = 0
@@ -148,9 +130,6 @@ export function Cursor() {
         const tgx = Math.round(cursor.current.x / BLOCK) * BLOCK
         const tgy = Math.round(cursor.current.y / BLOCK) * BLOCK
         if (orbiting.current) {
-          // Orbit step: head advances to the next cell on the orbit square.
-          // The 4 sides of the orbit are: right of center, below center,
-          // left of center, above center. Each tick advances one side.
           // If the cursor has moved off-center, end orbit and chase.
           if (
             Math.round(cursor.current.x / BLOCK) * BLOCK !==
@@ -170,7 +149,6 @@ export function Cursor() {
           const dx = tgx - head.x
           const dy = tgy - head.y
           if (dx === 0 && dy === 0) {
-            // Head just arrived at the cursor cell — start orbiting it.
             orbiting.current = true
             orbitCenter.current = { x: tgx, y: tgy }
             orbitStep.current = 0
@@ -190,13 +168,7 @@ export function Cursor() {
         stepY = dir.y * BLOCK
       }
 
-      // Move the head one cell. If it crosses a viewport edge, shift it
-      // back into bounds by exactly ±w / ±h — the amount the head wrapped.
-      // We use this exact wrap amount for every body block too, so the
-      // whole chain teleports together as one creature instead of head
-      // wrapping while the body stays put (which collapses the chain).
-      const oldHeadX = head.x
-      const oldHeadY = head.y
+      // Move the head one cell. Toroidal wrap on the page.
       head.x += stepX
       head.y += stepY
       const wrapX = head.x < 0 ? w : head.x >= w ? -w : 0
@@ -204,32 +176,19 @@ export function Cursor() {
       head.x += wrapX
       head.y += wrapY
 
-      // Snapshot every block's CURRENT cell into prevBlocks BEFORE the head
-      // moves and the body shifts — the render function will interpolate
-      // from prevBlocks[i] to positions.current[i] across the tick.
-      for (let i = 0; i < LENGTH; i++) {
-        prevBlocks.current[i]!.x = positions.current[i]!.x
-        prevBlocks.current[i]!.y = positions.current[i]!.y
+      // BODY: classic Nokia FIFO shift. block[i] takes the cell block[i+1]
+      // occupied at the START of this tick (from prevCells). The same
+      // wrapX/Y delta is applied so the whole chain teleports together
+      // across viewport edges.
+      for (let i = LENGTH - 1; i > 0; i--) {
+        const prev = prevBlocks.current[i - 1]!
+        positions.current[i]!.x = prev.x + wrapX
+        positions.current[i]!.y = prev.y + wrapY
       }
-
-      // Body: block L-1-i takes head position from (i+1) ticks ago, with
-      // the same wrap delta applied so the chain shape is preserved across
-      // wraps. Using a history queue (instead of a 1-tick snapshot) is the
-      // difference between "body collapses onto head" and "body stretches
-      // out behind head like a real snake".
-      for (let i = 0; i < LENGTH - 1; i++) {
-        const past = headHistory.current[i]
-        if (!past) continue
-        positions.current[i]!.x = past.x + wrapX
-        positions.current[i]!.y = past.y + wrapY
-      }
-
-      // Push the head's PRE-move cell onto the history (the cell it just
-      // left). The new head cell will be pushed at the start of next tick.
-      headHistory.current.unshift({ x: oldHeadX, y: oldHeadY })
-      if (headHistory.current.length > LENGTH - 1) {
-        headHistory.current.length = LENGTH - 1
-      }
+      // Block 0 (tail) keeps the previous tail position (since there's no
+      // block "in front of it" beyond the head that the head moved into).
+      positions.current[0]!.x += wrapX
+      positions.current[0]!.y += wrapY
 
       // Periodic random turn (wandering mode only — chase just follows).
       if (
@@ -243,9 +202,6 @@ export function Cursor() {
     }
 
     function render(progress: number) {
-      // Every block smoothly interpolates from prevBlocks[i] (its cell at
-      // the start of this tick) to positions[i] (its cell now). The whole
-      // chain slides smoothly between cells every tick.
       const sx = scroll.current.x
       const sy = scroll.current.y
       for (let i = 0; i < LENGTH; i++) {
@@ -266,8 +222,6 @@ export function Cursor() {
         step()
         lastTickAt.current = now
       }
-      // Render every frame with the current tick's interpolation progress
-      // (clamped to 0..1 so a long frame after a tick doesn't overshoot).
       const progress = Math.min(1, elapsed / TICK_MS)
       render(progress)
       raf = requestAnimationFrame(tick)
@@ -325,10 +279,6 @@ export function Cursor() {
             width: `${BLOCK}px`,
             height: `${BLOCK}px`,
             opacity: 0,
-            // z-index 0 = same stacking level as page content. Since this
-            // component renders BEFORE <Routes> in App.tsx, the snake paints
-            // first → page content paints on top → snake appears BEHIND
-            // text and other content. (Still visible against the body bg.)
             zIndex: 0,
           }}
         />

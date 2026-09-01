@@ -1,26 +1,21 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 4 // total blocks (head + 3 tail — less lag, tighter chain)
-const BLOCK = 18 // px per block (chunkier so the chain is easy to see)
-
-// Fixed pixels per tick the head advances toward its target. Constant
-// step (not eased) so the snake moves at a steady rate — doesn't speed
-// up at long distances and crawl when close.
-const STEP = 2
+const LENGTH = 4 // total blocks (head + 3 tail — tight chain)
+const BLOCK = 20 // px per block (cell size — also the per-tick movement distance)
 
 // Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.
 const TICK_MS = 110
 
-// If true, the head chases the user's cursor instead of walking in its
-// own direction. Easy to flip back to the wandering snake.
-const SNAKE_CHASES_CURSOR = true
-
 // The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
-// (so it doesn't loop forever in a straight line — it "thinks" and turns).
+// (so it doesn't loop forever in a straight line when wandering).
 const TURN_MIN_MS = 3500
 const TURN_RAND_MS = 4000
 
-// 4 cardinal directions only (no diagonals). The snake wraps toroidally.
+// If true, the head chases the user's cursor. If false (default), the
+// snake walks in its own direction on a grid.
+const SNAKE_CHASES_CURSOR = true
+
+// 4 cardinal directions only.
 const DIRECTIONS: { x: number; y: number }[] = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -29,35 +24,27 @@ const DIRECTIONS: { x: number; y: number }[] = [
 ]
 
 /**
- * Autonomous pixelated snake wandering across the screen — Nokia-Snake
- * physics:
- *
- *   - The HEAD advances one BLOCK every TICK_MS (cell-based, like the
- *     original game). Not pixel-by-frame.
- *   - Each body block takes the position the block in front of it had at
- *     the last tick (1-tick delay per segment). The body forms a connected
- *     chain of BLOCK-sized squares — not separated dots, not overlapping.
- *   - The snake walks in a straight line, periodically picks a new
- *     cardinal direction, and TELEPORTS through every edge of the page —
- *     reappears on the opposite side (toroidal wrap on the entire PAGE,
- *     not just the viewport). The snake is "aware of the whole page",
- *     so when the user scrolls the snake scrolls with the page (offset by
- *     scrollX/scrollY each render) rather than staying glued to the view.
- *   - Toggle SNAKE_CHASES_CURSOR to switch the head from walking in a
- *     fixed direction to easing toward the user's cursor (the cursor
- *     position is converted to page coordinates so the chase spans the
- *     full page, not just the viewport).
+ * Autonomous pixelated snake on a fixed grid — Nokia-Snake mechanics:
+ *  - The head occupies one grid cell. Each tick it advances ONE CELL in
+ *    the current cardinal direction (BLOCK px).
+ *  - Each body block occupies the cell the block in front of it occupied
+ *    last tick (1-tick delay per segment). The whole snake is always on
+ *    the grid.
+ *  - In CHASE mode, the head moves one cell per tick in whichever
+ *    cardinal direction most heads toward the cursor (whichever axis has
+ *    the larger delta). Discrete, cell-per-cell movement — no easing,
+ *    no pixel-by-pixel creep.
+ *  - Snake is page-aware: wraps at document bounds (full page width /
+ *    height) and renders with scrollX/scrollY subtracted so it scrolls
+ *    with the page (out of view as the user scrolls).
  *
  * Tunables (top of file):
- *   - BLOCK          size of each cell (also the per-tick movement)
+ *   - BLOCK          px per cell (= per-tick movement distance)
  *   - LENGTH         number of blocks in the snake
  *   - TICK_MS        time between each cell-step
  *   - TURN_MIN_MS    minimum time between random direction changes
- *   - TURN_RAND_MS   additional random delay on top of TURN_MIN_MS
- *   - SNAKE_CHASES_CURSOR   boolean — true: head chases cursor;
- *                             false (default): walks in its own direction
- *   - STEP           px per tick each block advances toward its target
- *                     (constant speed, no easing)
+ *   - TURN_RAND_MS   additional random delay
+ *   - SNAKE_CHASES_CURSOR   boolean — chase mode vs wander mode
  */
 export function Cursor() {
   const positions = useRef(
@@ -67,8 +54,8 @@ export function Cursor() {
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
   const dirIdx = useRef(0) // initial heading: right
-  const nextTurnAt = useRef(0) // when the snake next picks a new direction
-  const scroll = useRef({ x: 0, y: 0 }) // current scroll offset
+  const nextTurnAt = useRef(0)
+  const scroll = useRef({ x: 0, y: 0 })
   const cursor = useRef({ x: 0, y: 0, active: false })
 
   useEffect(() => {
@@ -80,17 +67,21 @@ export function Cursor() {
   useEffect(() => {
     if (disabled.current) return
 
-    // Seed on the 18-px grid near the top of the page.
+    // Snap the head seed to the grid and lay the body out one cell apart.
     const startX = BLOCK * 4
-    const startY = BLOCK * 4
+    const startY = BLOCK * 2
     for (let i = 0; i < LENGTH; i++) {
-      positions.current[i] = { x: startX + i * BLOCK, y: startY }
+      positions.current[i] = {
+        x: Math.round(startX / BLOCK) * BLOCK,
+        y: Math.round(startY / BLOCK) * BLOCK,
+      }
     }
+    // Shift the body leftward from the head so the snake points right
+    positions.current[0]!.x -= (LENGTH - 1) * BLOCK
 
     let raf = 0
 
     function pickRandomTurn() {
-      // Avoid flipping 180° (sudden U-turn looks unnatural).
       const opposite = (dirIdx.current + 2) % 4
       let next = Math.floor(Math.random() * 4)
       let tries = 0
@@ -102,8 +93,7 @@ export function Cursor() {
     }
 
     function step() {
-        // Page-aware bounds: snake wraps around the entire document, not just
-      // the current viewport.
+      // Page bounds for wrap.
       const w = Math.max(
         document.documentElement.scrollWidth,
         window.innerWidth
@@ -113,59 +103,63 @@ export function Cursor() {
         window.innerHeight
       )
 
-      // Two movement modes:
-      //   - SNAKE_CHASES_CURSOR: every block (head AND body) moves at a
-      //     fixed STEP px/tick toward its target (head → cursor, body →
-      //     block in front). Constant speed, no easing — pixel by pixel,
-      //     no rushing.
-      //   - default (Nokia-step): head moves one BLOCK per tick, each
-      //     body block takes the previous tick's position of the block
-      //     in front — discrete steps.
+      // Snapshot before the head moves, so the body shift reads the
+      // previous tick's position of each block (not the head's NEW cell).
+      const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
+
+      // Decide the head's step this tick:
+      //   - CHASE: pick the cardinal axis with the larger delta to the
+      //     cursor and step one cell toward it. Ties resolved randomly
+      //     between the two axes. Cursor coords are converted to grid
+      //     cells first so the chase happens in cells, not pixels.
+      //   - wander: step in the current <DIRECTIONS> heading.
+      const head = positions.current[LENGTH - 1]!
+      let stepX = 0
+      let stepY = 0
       if (SNAKE_CHASES_CURSOR && cursor.current.active) {
-        const head = positions.current[LENGTH - 1]!
-        const hdx = cursor.current.x - head.x
-        const hdy = cursor.current.y - head.y
-        const hdist = Math.hypot(hdx, hdy)
-        if (hdist > 0) {
-          head.x += (hdx / hdist) * STEP
-          head.y += (hdy / hdist) * STEP
-        }
-        for (let i = LENGTH - 2; i >= 0; i--) {
-          const cur = positions.current[i]!
-          const next = positions.current[i + 1]!
-          const dx = next.x - cur.x
-          const dy = next.y - cur.y
-          const dist = Math.hypot(dx, dy)
-          if (dist > 0) {
-            cur.x += (dx / dist) * STEP
-            cur.y += (dy / dist) * STEP
-          }
+        // Snap the cursor to the grid so the chase is in cell units.
+        const tgx = Math.round(cursor.current.x / BLOCK) * BLOCK
+        const tgy = Math.round(cursor.current.y / BLOCK) * BLOCK
+        const dx = tgx - head.x
+        const dy = tgy - head.y
+        if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+          stepX = Math.sign(dx) * BLOCK
+        } else if (dy !== 0) {
+          stepY = Math.sign(dy) * BLOCK
+        } else {
+          // On the target cell — pick a random axis to keep moving.
+          if (Math.random() < 0.5 && dx !== 0) stepX = Math.sign(dx) * BLOCK
+          else if (dy !== 0) stepY = Math.sign(dy) * BLOCK
+          else stepX = (Math.random() < 0.5 ? -1 : 1) * BLOCK
         }
       } else {
-        // Snapshot before moving so the body shift uses the previous tick's
-        // position of the block in front (not the head's NEW position).
-        const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
-        const head = positions.current[LENGTH - 1]!
         const dir = DIRECTIONS[dirIdx.current]!
-        head.x += dir.x * BLOCK
-        head.y += dir.y * BLOCK
-        for (let i = 0; i < LENGTH - 1; i++) {
-          positions.current[i] = snapshot[i + 1]
-        }
+        stepX = dir.x * BLOCK
+        stepY = dir.y * BLOCK
       }
 
-      // Wrap every block within the page bounds so the whole chain
-      // teleports together (no "tail disappears" on wrap).
-      for (let i = 0; i < LENGTH; i++) {
-        const p = positions.current[i]!
-        if (p.x < 0) p.x += w
-        else if (p.x >= w) p.x -= w
-        if (p.y < 0) p.y += h
-        else if (p.y >= h) p.y -= h
+      // Move the head one cell. If it crosses a viewport edge, shift it
+      // back into bounds by exactly ±w / ±h — the amount the head wrapped.
+      // We use this exact wrap amount for every body block too, so the
+      // whole chain teleports together as one creature instead of head
+      // wrapping while the body stays put (which collapses the chain).
+      head.x += stepX
+      head.y += stepY
+      const wrapX = head.x < 0 ? w : head.x >= w ? -w : 0
+      const wrapY = head.y < 0 ? h : head.y >= h ? -h : 0
+      head.x += wrapX
+      head.y += wrapY
+
+      // Body shift: each block takes the cell the block in front of it
+      // occupied at the start of this tick (from the snapshot), with the
+      // same wrap delta applied so the chain shape is preserved.
+      for (let i = 0; i < LENGTH - 1; i++) {
+        const sw = snapshot[i + 1]!
+        positions.current[i]!.x = sw.x + wrapX
+        positions.current[i]!.y = sw.y + wrapY
       }
 
-      // Periodic random direction change so the wandering snake doesn't
-      // loop forever in a straight line. Skip when chasing cursor.
+      // Periodic random turn (wandering mode only — chase just follows).
       if (
         !SNAKE_CHASES_CURSOR &&
         performance.now() >= nextTurnAt.current
@@ -177,10 +171,8 @@ export function Cursor() {
     }
 
     function render() {
-      // Subtract scroll so the snake moves WITH the page (it scrolls
-      // out of view as the user scrolls), not pinned to the viewport.
-      // The snake's logical position lives in page coordinates; we shift
-      // its visual position by -scroll so it appears stuck to the page.
+      // Subtract scroll so the snake moves with the page content rather
+      // than staying glued to the viewport.
       const sx = scroll.current.x
       const sy = scroll.current.y
       for (let i = 0; i < LENGTH; i++) {
@@ -201,11 +193,11 @@ export function Cursor() {
       raf = requestAnimationFrame(tick)
     }
 
-    // Initial render so blocks are visible at the seed position.
     lastTickAt.current = performance.now()
     nextTurnAt.current =
       performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
     render()
+
     requestAnimationFrame(() => {
       for (const el of refs.current) {
         if (el) el.style.opacity = "1"
@@ -218,9 +210,6 @@ export function Cursor() {
       scroll.current.y = window.scrollY
     }
     const onMove = (e: MouseEvent) => {
-      // Convert viewport (clientX/Y) to page coordinates by adding the
-      // current scroll offset. Then the snake chases the cursor across
-      // the entire page, not just the visible viewport.
       cursor.current.x = e.clientX + window.scrollX
       cursor.current.y = e.clientY + window.scrollY
       cursor.current.active = true

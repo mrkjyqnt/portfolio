@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react"
 
 const LENGTH = 22 // number of blocks
-const BLOCK = 12 // px — each square segment
-const STEP = 3 // px per frame the head advances
+const BLOCK = 14 // px — each square segment
+const STEP = 7 // px per frame the head advances (half a block, so blocks overlap = connected snake)
 
 // 8 cardinal + diagonal directions as unit vectors.
 const DIRECTIONS: { x: number; y: number }[] = [
@@ -16,35 +16,29 @@ const DIRECTIONS: { x: number; y: number }[] = [
   { x: 1, y: -1 },
 ]
 
-const DIR_NAMES = [
-  "right",
-  "down-right",
-  "down",
-  "down-left",
-  "left",
-  "up-left",
-  "up",
-  "up-right",
-] as const
-
 /**
  * Autonomous pixelated snake wandering across the screen — not a cursor
- * follower. The snake picks a direction, walks in it, occasionally turns
- * to a new direction (every few seconds + when it nears a viewport edge),
- * and its body trails behind the head by inheriting the head's past
- * positions one frame at a time.
+ * follower. Picks a direction, walks in it, turns every few seconds or
+ * when it nears a viewport edge. Body trails the head by inheriting the
+ * head's past positions one frame at a time.
  *
- * Wander tunables (top of file):
+ * Tunables (top of file):
  *   - BLOCK          segment size
  *   - STEP           head speed (px/frame)
  *   - TURN_MIN_MS    minimum time between random turns
- *   - TURN_RAND_MS   additional random delay on top of TURN_MIN_MS
- *   - EDGE_MARGIN    distance from any viewport edge at which the
- *                     snake forces a turn away
+ *   - TURN_RAND_MS   additional random delay
+ *   - EDGE_MARGIN    distance from any viewport edge that forces a turn
+ *
+ * Hidden when:
+ *  - `prefers-reduced-motion: reduce`
+ *  - the viewport is narrower than `md` (touch)
+ *
+ * Mounts a `data-cursor=\"snake\"` flag on <html> so global CSS can hide
+ * the OS cursor (only one pointer on screen — the snake).
  */
-const TURN_MIN_MS = 1200
-const TURN_RAND_MS = 2200
-const EDGE_MARGIN = 60
+const TURN_MIN_MS = 900
+const TURN_RAND_MS = 1800
+const EDGE_MARGIN = 80
 
 export function Cursor() {
   const positions = useRef(
@@ -62,13 +56,13 @@ export function Cursor() {
   useEffect(() => {
     if (disabled.current) return
 
-    // Seed in the middle of the viewport with a random heading.
-    const startX = window.innerWidth / 2
-    const startY = window.innerHeight / 2
+    // Start the snake near the top-left so it's clearly NOT at the cursor.
+    const startX = 80
+    const startY = 80
     for (let i = 0; i < LENGTH; i++) {
       positions.current[i] = { x: startX, y: startY }
     }
-    // Initial direction biased toward "right"
+    // Initial heading: right
     let dirIdx = 0
 
     let raf = 0
@@ -76,28 +70,24 @@ export function Cursor() {
     let nextTurnIn = TURN_MIN_MS + Math.random() * TURN_RAND_MS
 
     function pickTurnFromEdge() {
-      // Pick a direction whose unit vector moves the head AWAY from the
-      // nearest edge (away = positive component if near left/right edge,
-      // positive/negative for top/bottom).
       const head = positions.current[LENGTH - 1]!
-      const dx = window.innerWidth / 2 - head.x // > 0 = need to move right
+      // Direction that heads away from the nearest edge.
+      const dx = window.innerWidth / 2 - head.x
       const dy = window.innerHeight / 2 - head.y
+      const sx = Math.sign(dx)
+      const sy = Math.sign(dy)
       const candidates = DIRECTIONS.map((d, i) => ({
         i,
-        score: d.x * Math.sign(dx) + d.y * Math.sign(dy),
+        score: d.x * sx + d.y * sy,
       }))
-      // Pick the highest-scoring direction (most "toward center").
       candidates.sort((a, b) => b.score - a.score)
-      // Random among the top 2 so it doesn't always head straight back.
       const chosen = candidates[Math.floor(Math.random() * 2)].i
-      // Avoid a 180° flip (sudden U-turn looks unnatural)
       const opposite = (dirIdx + 4) % 8
       if (chosen === opposite) dirIdx = (chosen + 1) % 8
       else dirIdx = chosen
     }
 
     function pickRandomTurn() {
-      // Pick a direction that's not the current or the opposite (no U-turns)
       const opposite = (dirIdx + 4) % 8
       let next = Math.floor(Math.random() * 8)
       let tries = 0
@@ -112,37 +102,34 @@ export function Cursor() {
       const head = positions.current[LENGTH - 1]!
       const dir = DIRECTIONS[dirIdx]!
 
-      // Head moves STEP px per frame along its current direction.
       head.x += dir.x * STEP
       head.y += dir.y * STEP
 
-      // Body trails: each segment copies the previous segment's position
-      // (1-frame delay per segment → snake lag).
+      // Body trails the head via 1-frame delay per segment.
       for (let i = 0; i < LENGTH - 1; i++) {
         positions.current[i] = positions.current[i + 1]!
       }
 
-      // Decide if it's time to turn. Two triggers:
-      //   1. Time-based random turn (every TURN_MIN..TURN_MIN+TURN_RAND ms)
-      //   2. Edge-based forced turn (when the head is within EDGE_MARGIN
-      //      of any viewport edge)
+      // Two turn triggers: time-based random, and edge-based forced.
       const now = performance.now()
       if (now - lastTurnAt >= nextTurnIn) {
         pickRandomTurn()
         lastTurnAt = now
         nextTurnIn = TURN_MIN_MS + Math.random() * TURN_RAND_MS
       } else {
-        const hx = head.x
-        const hy = head.y
-        if (
-          hx < EDGE_MARGIN ||
-          hx > window.innerWidth - EDGE_MARGIN ||
-          hy < EDGE_MARGIN ||
-          hy > window.innerHeight - EDGE_MARGIN
-        ) {
-          pickTurnFromEdge()
-          lastTurnAt = now
-          nextTurnIn = TURN_MIN_MS + Math.random() * TURN_RAND_MS
+        const headEl = refs.current[LENGTH - 1]
+        if (headEl) {
+          const rect = headEl.getBoundingClientRect()
+          if (
+            rect.left < EDGE_MARGIN ||
+            rect.right > window.innerWidth - EDGE_MARGIN ||
+            rect.top < EDGE_MARGIN ||
+            rect.bottom > window.innerHeight - EDGE_MARGIN
+          ) {
+            pickTurnFromEdge()
+            lastTurnAt = now
+            nextTurnIn = TURN_MIN_MS + Math.random() * TURN_RAND_MS
+          }
         }
       }
 
@@ -157,7 +144,8 @@ export function Cursor() {
       raf = requestAnimationFrame(tick)
     }
 
-    // Fade in once we know the snake is seeded.
+    document.documentElement.dataset.cursor = "snake"
+
     requestAnimationFrame(() => {
       for (const el of refs.current) {
         if (el) el.style.opacity = "1"
@@ -167,6 +155,7 @@ export function Cursor() {
 
     return () => {
       cancelAnimationFrame(raf)
+      delete document.documentElement.dataset.cursor
     }
   }, [])
 
@@ -193,6 +182,3 @@ export function Cursor() {
     </>
   )
 }
-
-// Exported for diagnostics only.
-export const __diag = { LENGTH, BLOCK, STEP, TURN_MIN_MS, TURN_RAND_MS, EDGE_MARGIN, DIR_NAMES }

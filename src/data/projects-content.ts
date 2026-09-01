@@ -15,6 +15,8 @@ export type ProjectContent = {
   slug: string
   title: string
   tagline: string
+  screenshot: string
+  screenshotCaption: string
   heroCtas: { label: string; href: string; external?: boolean }[]
   overview: string
   howItWorks: ProjectSection[]
@@ -30,6 +32,9 @@ export const projectsContent: ProjectContent[] = [
     slug: "basepaint-plugin",
     title: "BasePaint Plugin",
     tagline: "Tools that should've been there from day one.",
+    screenshot: "/projects/basepaint-plugin.png",
+    screenshotCaption:
+      "Landing page — Hackathon 2026 winner banner + the four injected tools.",
     heroCtas: [
       {
         label: "Try the demo",
@@ -82,6 +87,9 @@ export const projectsContent: ProjectContent[] = [
     title: "CSE Classroom",
     tagline:
       "An unofficial, AI-tutored reviewer for the Philippine Civil Service Exam.",
+    screenshot: "/projects/cse-classroom.png",
+    screenshotCaption:
+      "Live demo — locked / unlocked topic grid with progress tracking.",
     heroCtas: [
       {
         label: "Open the app",
@@ -135,6 +143,9 @@ export const projectsContent: ProjectContent[] = [
     slug: "basepaint-assist",
     title: "BasePaint Assist",
     tagline: "Ask the canvas anything — typed, server-only, never signs.",
+    screenshot: "/projects/basepaint-assist.png",
+    screenshotCaption:
+      "Live demo — chat with slash-command routing + image-to-strokes.",
     heroCtas: [
       {
         label: "Try it",

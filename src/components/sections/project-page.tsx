@@ -132,6 +132,25 @@ export function ProjectPage() {
 
       <Separator />
 
+      {/* SCREENSHOT */}
+      <FadeUp>
+        <figure className="space-y-3">
+          <div className="overflow-hidden rounded-lg border border-border bg-muted/30 shadow-sm">
+            <img
+              src={project.screenshot}
+              alt={`${project.title} — ${project.screenshotCaption}`}
+              className="block w-full"
+              loading="lazy"
+            />
+          </div>
+          <figcaption className="text-xs text-muted-foreground">
+            {project.screenshotCaption}
+          </figcaption>
+        </figure>
+      </FadeUp>
+
+      <Separator />
+
       {/* OVERVIEW */}
       <FadeUp>
         <section aria-label="Overview" className="space-y-6">

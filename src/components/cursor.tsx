@@ -1,98 +1,131 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
 
-const EASING = 0.18
+const LENGTH = 16
+const BLOCK = 14 // px — size of each square segment (Nokia-snake-block scale)
+const GAP = 2 // px between blocks
+const STEP = BLOCK + GAP
+const LAG = 0.12 // smaller = slower chase (each block catches up less per frame)
+
+type Pt = { x: number; y: number }
 
 /**
- * Smooth-following cursor dot.
- * - Hides the OS cursor (`cursor: none`) on interactive areas
- * - A small dot tracks the real cursor with a damped easing loop
- * - Grows + eases on interactive elements (links, buttons, inputs)
- * - Disabled under `prefers-reduced-motion: reduce`
- * - Hidden when the cursor leaves the window
+ * Nokia-Snake-style trailing cursor.
+ *  - Square blocks (no rounding) at a fixed grid scale
+ *  - Head (segment 0) chases the real cursor with light easing
+ *  - Each subsequent block eases toward the previous block, producing
+ *    the classic snake-body lag
+ *  - All blocks rendered on a single rAF loop, GPU-friendly (just transforms)
+ *  - Hidden on `prefers-reduced-motion` and on viewports < md (touch)
+ *  - Hidden when the cursor leaves the window
  */
 export function Cursor() {
-  const dotRef = useRef<HTMLDivElement | null>(null)
-  const ringRef = useRef<HTMLDivElement | null>(null)
-  const [active, setActive] = useState(false)
-  const [overInteractive, setOverInteractive] = useState(false)
-  const reduced = useRef(false)
+  const positions = useRef<Pt[]>(
+    Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
+  )
+  const refs = useRef<(HTMLDivElement | null)[]>([])
+  const disabled = useRef(false)
 
   useEffect(() => {
-    reduced.current = window.matchMedia(
+    disabled.current = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     ).matches
   }, [])
 
   useEffect(() => {
-    if (reduced.current) return
+    if (disabled.current) return
 
-    let mouseX = window.innerWidth / 2
-    let mouseY = window.innerHeight / 2
-    let dotX = mouseX
-    let dotY = mouseY
-    let ringX = mouseX
-    let ringY = mouseY
+    let active = false
     let raf = 0
-
-    const onMove = (e: MouseEvent) => {
-      mouseX = e.clientX
-      mouseY = e.clientY
-      if (!active) setActive(true)
-
-      const target = e.target as HTMLElement
-      setOverInteractive(
-        !!target.closest("a, button, [role='button'], input, textarea, select")
-      )
-    }
-    const onLeave = () => setActive(false)
+    const cursor: Pt = { x: -9999, y: -9999 }
 
     const tick = () => {
-      dotX += (mouseX - dotX) * EASING
-      dotY += (mouseY - dotY) * EASING
-      ringX += (mouseX - ringX) * EASING * 0.45
-      ringY += (mouseY - ringY) * EASING * 0.45
-      if (dotRef.current) {
-        dotRef.current.style.transform = `translate3d(${dotX}px, ${dotY}px, 0)`
+      // Snake physics: head eases toward cursor, every other block eases
+      // toward the block in front of it. The chain produces the trailing
+      // body lag.
+      for (let i = LENGTH - 1; i >= 0; i--) {
+        const target =
+          i === 0 ? cursor : positions.current[i - 1]!
+        const cur = positions.current[i]!
+        const lag = i === 0 ? LAG * 2 : LAG
+        cur.x += (target.x - cur.x) * lag
+        cur.y += (target.y - cur.y) * lag
       }
-      if (ringRef.current) {
-        ringRef.current.style.transform = `translate3d(${ringX}px, ${ringY}px, 0)`
+
+      for (let i = 0; i < LENGTH; i++) {
+        const el = refs.current[i]
+        const p = positions.current[i]
+        if (!el || !p) continue
+        // Snap to a fixed grid around the cursor position so the snake looks
+        // like blocks rather than smooth circles.
+        const snappedX = Math.round(p.x / STEP) * STEP - BLOCK / 2
+        const snappedY = Math.round(p.y / STEP) * STEP - BLOCK / 2
+        el.style.transform = `translate3d(${snappedX}px, ${snappedY}px, 0)`
       }
+
       raf = requestAnimationFrame(tick)
+    }
+
+    const onMove = (e: MouseEvent) => {
+      cursor.x = e.clientX
+      cursor.y = e.clientY
+      if (!active) {
+        active = true
+        // Seed the snake at the cursor so it doesn't sweep across on first move
+        for (let i = 0; i < LENGTH; i++) {
+          positions.current[i] = { x: cursor.x, y: cursor.y }
+        }
+        for (let i = 0; i < LENGTH; i++) {
+          const el = refs.current[i]
+          if (el) el.style.opacity = i === 0 ? "1" : String(1 - i / LENGTH)
+        }
+        raf = requestAnimationFrame(tick)
+      }
+    }
+    const onLeave = () => {
+      active = false
+      cancelAnimationFrame(raf)
+      for (const el of refs.current) {
+        if (el) el.style.opacity = "0"
+      }
     }
 
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseleave", onLeave)
-    raf = requestAnimationFrame(tick)
     return () => {
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mouseleave", onLeave)
       cancelAnimationFrame(raf)
     }
-  }, [active])
+  }, [])
 
-  if (reduced.current) return null
+  if (disabled.current) return null
 
   return (
     <>
-      <div
-        aria-hidden
-        ref={ringRef}
-        className="pointer-events-none fixed left-0 top-0 z-[100] hidden h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-foreground/30 transition-[width,height,border-color] duration-200 md:block"
-        style={{
-          width: overInteractive ? 56 : 40,
-          height: overInteractive ? 56 : 40,
-          opacity: active ? 1 : 0,
-          borderColor: overInteractive
-            ? "color-mix(in oklch, var(--primary) 60%, transparent)"
-            : "color-mix(in oklch, var(--foreground) 30%, transparent)",
-        }}
-      />
-      <div
-        aria-hidden
-        ref={dotRef}
-        className="pointer-events-none fixed left-0 top-0 z-[101] hidden h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground transition-opacity duration-150 md:block"
-        style={{ opacity: active ? 1 : 0 }}
-      />
+      {Array.from({ length: LENGTH }).map((_, i) => {
+        // Head is primary; each subsequent block fades. Slight color shift
+        // head → tail: head is full foreground, tail nudges toward primary.
+        const isHead = i === 0
+        return (
+          <div
+            key={i}
+            aria-hidden
+            ref={(el) => {
+              refs.current[i] = el
+            }}
+            className={
+              "pointer-events-none fixed left-0 top-0 hidden md:block " +
+              (isHead ? "bg-foreground" : "bg-foreground/70")
+            }
+            style={{
+              width: `${BLOCK}px`,
+              height: `${BLOCK}px`,
+              opacity: 0,
+              zIndex: 100 + (LENGTH - i),
+            }}
+          />
+        )
+      })}
     </>
   )
 }

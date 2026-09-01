@@ -3,9 +3,9 @@ import { useEffect, useRef } from "react"
 const LENGTH = 4 // total blocks (head + 3 tail — tight chain)
 const BLOCK = 20 // px per block (cell size — also the per-tick movement distance)
 
-// Time between each cell-step. ~200 ms = ~5 moves/sec — slow enough to
-// read the chain, fast enough to feel alive.
-const TICK_MS = 200
+// Time between each cell-step. ~150 ms = ~6.5 moves/sec — readable but
+// not sluggish.
+const TICK_MS = 150
 
 // The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
 // (so it doesn't loop forever in a straight line when wandering).
@@ -60,7 +60,15 @@ export function Cursor() {
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
   const dirIdx = useRef(0) // initial heading: right
-  const orbitStep = useRef(0) // cycles through DIRECTIONS when circling the cursor
+  // Orbit state: when the head reaches the cursor cell, the snake enters
+  // orbit mode — it cycles through 4 cardinal directions around the cursor
+  // (right → down → left → up → repeat) instead of being dragged back by
+  // the chase logic each tick. orbitCenter is the cursor cell at the
+  // moment orbit started; if the cursor moves off-center, orbit ends and
+  // chase resumes.
+  const orbitStep = useRef(0)
+  const orbiting = useRef(false)
+  const orbitCenter = useRef({ x: 0, y: 0 })
   const nextTurnAt = useRef(0)
   const scroll = useRef({ x: 0, y: 0 })
   const cursor = useRef({ x: 0, y: 0, active: false })
@@ -115,10 +123,11 @@ export function Cursor() {
       const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
 
       // Decide the head's step this tick:
-      //   - CHASE: head steps one cell toward the cursor. If it's already
-      //     on the cursor's cell, it ORBITS — cycles through the 4 cardinal
-      //     directions so the snake circles around the cursor instead of
-      //     sitting on it.
+      //   - CHASE + head on cursor cell: enter ORBIT mode. Head cycles
+      //     around the cursor's cell (right → down → left → up → repeat)
+      //     instead of being snapped back to the center each tick. Orbit
+      //     ends when the cursor leaves the orbit center.
+      //   - CHASE + head off cursor: head steps one cell toward cursor.
       //   - wander: step in the current <DIRECTIONS> heading.
       const head = positions.current[LENGTH - 1]!
       let stepX = 0
@@ -126,18 +135,42 @@ export function Cursor() {
       if (SNAKE_CHASES_CURSOR && cursor.current.active) {
         const tgx = Math.round(cursor.current.x / BLOCK) * BLOCK
         const tgy = Math.round(cursor.current.y / BLOCK) * BLOCK
-        const dx = tgx - head.x
-        const dy = tgy - head.y
-        if (dx === 0 && dy === 0) {
-          // Head is on the cursor cell — circle around it.
-          orbitStep.current = (orbitStep.current + 1) % 4
-          const d = DIRECTIONS[orbitStep.current]!
-          stepX = d.x * BLOCK
-          stepY = d.y * BLOCK
-        } else if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
-          stepX = Math.sign(dx) * BLOCK
-        } else if (dy !== 0) {
-          stepY = Math.sign(dy) * BLOCK
+        if (orbiting.current) {
+          // Orbit step: head advances to the next cell on the orbit square.
+          // The 4 sides of the orbit are: right of center, below center,
+          // left of center, above center. Each tick advances one side.
+          // If the cursor has moved off-center, end orbit and chase.
+          if (
+            Math.round(cursor.current.x / BLOCK) * BLOCK !==
+              orbitCenter.current.x ||
+            Math.round(cursor.current.y / BLOCK) * BLOCK !==
+              orbitCenter.current.y
+          ) {
+            orbiting.current = false
+          } else {
+            const side = DIRECTIONS[orbitStep.current]!
+            stepX = side.x * BLOCK
+            stepY = side.y * BLOCK
+            orbitStep.current = (orbitStep.current + 1) % 4
+          }
+        }
+        if (!orbiting.current) {
+          const dx = tgx - head.x
+          const dy = tgy - head.y
+          if (dx === 0 && dy === 0) {
+            // Head just arrived at the cursor cell — start orbiting it.
+            orbiting.current = true
+            orbitCenter.current = { x: tgx, y: tgy }
+            orbitStep.current = 0
+            const side = DIRECTIONS[0]!
+            stepX = side.x * BLOCK
+            stepY = side.y * BLOCK
+            orbitStep.current = 1
+          } else if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+            stepX = Math.sign(dx) * BLOCK
+          } else if (dy !== 0) {
+            stepY = Math.sign(dy) * BLOCK
+          }
         }
       } else {
         const dir = DIRECTIONS[dirIdx.current]!

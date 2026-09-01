@@ -102,7 +102,7 @@ export function Cursor() {
     function step() {
       // Snapshot every block's CURRENT cell into prevBlocks so the render
       // function can interpolate from each block's old cell to its new
-      // cell across the tick.
+      // cell across the tick. Snapshotted BEFORE any updates this tick.
       for (let i = 0; i < LENGTH; i++) {
         prevBlocks.current[i]!.x = positions.current[i]!.x
         prevBlocks.current[i]!.y = positions.current[i]!.y
@@ -119,10 +119,9 @@ export function Cursor() {
       )
 
       // Decide the head's step this tick.
-      //   - CHASE + head on cursor cell → orbit the cursor (4-square
-      //     loop around the cursor's cell).
+      //   - CHASE + head on cursor cell → orbit the cursor.
       //   - CHASE + head off cursor → step one cell toward cursor.
-      //   - wander → step in the current heading direction.
+      //   - wander → step in current heading.
       const head = positions.current[LENGTH - 1]!
       let stepX = 0
       let stepY = 0
@@ -130,7 +129,6 @@ export function Cursor() {
         const tgx = Math.round(cursor.current.x / BLOCK) * BLOCK
         const tgy = Math.round(cursor.current.y / BLOCK) * BLOCK
         if (orbiting.current) {
-          // If the cursor has moved off-center, end orbit and chase.
           if (
             Math.round(cursor.current.x / BLOCK) * BLOCK !==
               orbitCenter.current.x ||
@@ -168,7 +166,7 @@ export function Cursor() {
         stepY = dir.y * BLOCK
       }
 
-      // Move the head one cell. Toroidal wrap on the page.
+      // 1. Move head FIRST (with toroidal wrap).
       head.x += stepX
       head.y += stepY
       const wrapX = head.x < 0 ? w : head.x >= w ? -w : 0
@@ -176,21 +174,17 @@ export function Cursor() {
       head.x += wrapX
       head.y += wrapY
 
-      // BODY: classic Nokia FIFO shift. block[i] takes the cell block[i+1]
-      // occupied at the START of this tick (from prevCells). The same
-      // wrapX/Y delta is applied so the whole chain teleports together
-      // across viewport edges.
-      for (let i = LENGTH - 1; i > 0; i--) {
-        const prev = prevBlocks.current[i - 1]!
-        positions.current[i]!.x = prev.x + wrapX
-        positions.current[i]!.y = prev.y + wrapY
+      // 2. Body shift using the PRE-HEAD-MOVE snapshot. block[i] takes
+      //    block[i+1]'s old cell — i.e., each body block slides into the
+      //    cell the block in front of it was in at the start of this tick.
+      //    The head (positions[L-1]) is NOT touched here — it's already
+      //    at its new cell from step 1.
+      for (let i = LENGTH - 2; i >= 0; i--) {
+        positions.current[i]!.x = prevBlocks.current[i + 1]!.x + wrapX
+        positions.current[i]!.y = prevBlocks.current[i + 1]!.y + wrapY
       }
-      // Block 0 (tail) keeps the previous tail position (since there's no
-      // block "in front of it" beyond the head that the head moved into).
-      positions.current[0]!.x += wrapX
-      positions.current[0]!.y += wrapY
 
-      // Periodic random turn (wandering mode only — chase just follows).
+      // Periodic random turn (wandering mode only).
       if (
         !SNAKE_CHASES_CURSOR &&
         performance.now() >= nextTurnAt.current

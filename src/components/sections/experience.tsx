@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { experience } from "@/data/experience"
 import { SectionLabel } from "./section-label"
 import { FadeUp } from "@/components/motion/fade-up"
@@ -55,7 +54,6 @@ export function Experience() {
           </article>
         ))}
       </section>
-      <Separator className="mt-12" />
     </FadeUp>
   )
 }

@@ -1,4 +1,3 @@
-import { Separator } from "@/components/ui/separator"
 import { about } from "@/data/about"
 import { SectionLabel } from "./section-label"
 import { FadeUp } from "@/components/motion/fade-up"
@@ -18,7 +17,6 @@ export function About() {
           ))}
         </div>
       </section>
-      <Separator className="mt-12" />
     </FadeUp>
   )
 }

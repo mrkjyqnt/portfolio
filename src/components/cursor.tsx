@@ -1,11 +1,14 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 20 // number of blocks
-const BLOCK = 12 // px — each square segment
-const STEP = 2 // px per frame the head advances — slow, pixel-step
+const LENGTH = 18 // number of blocks
+const BLOCK = 14 // px per block (cell size)
 
-// 4 cardinal directions only (no diagonals). The snake walks in straight
-// lines until it hits a viewport edge, then turns. No random turns.
+// Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.
+const TICK_MS = 110
+const EDGE_MARGIN = BLOCK * 2 // turn before hitting the edge
+
+// 4 cardinal directions only (no diagonals). Each tick moves the head by
+// BLOCK pixels in one of these directions.
 const DIRECTIONS: { x: number; y: number }[] = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -14,31 +17,31 @@ const DIRECTIONS: { x: number; y: number }[] = [
 ]
 
 /**
- * Autonomous pixelated snake wandering across the screen — not a cursor
- * follower. Picks a direction, walks in it, turns every few seconds or
- * when it nears a viewport edge. Body trails the head by inheriting the
- * head's past positions one frame at a time.
+ * Autonomous pixelated snake wandering across the screen — Nokia-Snake
+ * physics:
+ *
+ *   - The HEAD advances one BLOCK every TICK_MS (cell-based, like the
+ *     original game). Not pixel-by-frame.
+ *   - Each body block takes the position the block in front of it had at
+ *     the last tick (1-tick delay per segment). The body forms a connected
+ *     chain of BLOCK-sized squares — not separated dots, not overlapping.
+ *   - The snake walks in a straight line until the head is within
+ *     EDGE_MARGIN of a viewport edge, then turns 90° (no random turns).
  *
  * Tunables (top of file):
- *   - BLOCK          segment size
- *   - STEP           head speed (px/frame) — small = slow
- *   - EDGE_MARGIN    distance from any viewport edge that forces a turn
- *
- * Hidden when:
- *  - `prefers-reduced-motion: reduce`
- *  - the viewport is narrower than `md` (touch)
- *
- * Mounts a `data-cursor=\"snake\"` flag on <html> so global CSS can hide
- * the OS cursor (only one pointer on screen — the snake).
+ *   - BLOCK          size of each cell (also the per-tick movement)
+ *   - LENGTH         number of blocks in the snake
+ *   - TICK_MS        time between each cell-step
+ *   - EDGE_MARGIN    distance from any viewport edge that triggers a turn
  */
-const EDGE_MARGIN = 60
-
 export function Cursor() {
   const positions = useRef(
     Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
   )
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const disabled = useRef(false)
+  const lastTickAt = useRef(0)
+  const dirIdx = useRef(0) // initial heading: right
 
   useEffect(() => {
     disabled.current = window.matchMedia(
@@ -49,50 +52,49 @@ export function Cursor() {
   useEffect(() => {
     if (disabled.current) return
 
-    // Start the snake near the top-left so it's clearly NOT at the cursor.
-    const startX = 80
-    const startY = 80
+    // Seed on the 14-px grid, snapped to top-left so the snake visibly
+    // walks across the screen rather than starting at the cursor.
+    const startX = BLOCK * 6
+    const startY = BLOCK * 4
     for (let i = 0; i < LENGTH; i++) {
-      positions.current[i] = { x: startX, y: startY }
+      positions.current[i] = { x: startX + i * BLOCK, y: startY }
     }
-    // Initial heading: right
-    let dirIdx = 0
 
     let raf = 0
 
     function pickTurnFromEdge() {
       const head = positions.current[LENGTH - 1]!
-      // Direction that heads away from the nearest edge.
       const dx = window.innerWidth / 2 - head.x
       const dy = window.innerHeight / 2 - head.y
       const sx = Math.sign(dx)
       const sy = Math.sign(dy)
+      // Score each direction by how much it heads toward viewport center.
       const candidates = DIRECTIONS.map((d, i) => ({
         i,
         score: d.x * sx + d.y * sy,
       }))
       candidates.sort((a, b) => b.score - a.score)
+      // Pick from the top 2 so the snake doesn't always come straight back
+      // to center (a touch of randomness on the edge turn).
       const chosen = candidates[Math.floor(Math.random() * 2)].i
-      const opposite = (dirIdx + 2) % 4
-      if (chosen === opposite) dirIdx = (chosen + 1) % 4
-      else dirIdx = chosen
+      const opposite = (dirIdx.current + 2) % 4
+      dirIdx.current = chosen === opposite ? (chosen + 1) % 4 : chosen
     }
 
-    const tick = () => {
+    function step() {
+      // One Nokia-style step: head moves BLOCK pixels in its current
+      // direction; each body block inherits the previous block's cell.
       const head = positions.current[LENGTH - 1]!
-      const dir = DIRECTIONS[dirIdx]!
+      const dir = DIRECTIONS[dirIdx.current]!
+      head.x += dir.x * BLOCK
+      head.y += dir.y * BLOCK
 
-      head.x += dir.x * STEP
-      head.y += dir.y * STEP
-
-      // Body trails the head via 1-frame delay per segment.
       for (let i = 0; i < LENGTH - 1; i++) {
         positions.current[i] = positions.current[i + 1]!
       }
 
-      // One turn trigger: edge-based. The snake walks in a straight line
-      // until it's near a viewport edge, then turns. No random time-based
-      // turns — those made it feel like it was bouncing around.
+      // Turn only when the head's bounding rect crosses EDGE_MARGIN of any
+      // viewport edge. No random or time-based turns.
       const headEl = refs.current[LENGTH - 1]
       if (headEl) {
         const rect = headEl.getBoundingClientRect()
@@ -105,20 +107,30 @@ export function Cursor() {
           pickTurnFromEdge()
         }
       }
+    }
 
-      // Render every block at its current position.
+    function render() {
       for (let i = 0; i < LENGTH; i++) {
         const el = refs.current[i]
         const p = positions.current[i]
         if (!el || !p) continue
-        el.style.transform = `translate3d(${p.x - BLOCK / 2}px, ${p.y - BLOCK / 2}px, 0)`
+        el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0)`
       }
+    }
 
+    function tick() {
+      const now = performance.now()
+      if (now - lastTickAt.current >= TICK_MS) {
+        step()
+        render()
+        lastTickAt.current = now
+      }
       raf = requestAnimationFrame(tick)
     }
 
-    document.documentElement.dataset.cursor = "snake"
-
+    // Initial render so blocks are visible at the seed position.
+    lastTickAt.current = performance.now()
+    render()
     requestAnimationFrame(() => {
       for (const el of refs.current) {
         if (el) el.style.opacity = "1"
@@ -128,7 +140,6 @@ export function Cursor() {
 
     return () => {
       cancelAnimationFrame(raf)
-      delete document.documentElement.dataset.cursor
     }
   }, [])
 

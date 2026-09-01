@@ -3,8 +3,9 @@ import { useEffect, useRef } from "react"
 const LENGTH = 4 // total blocks (head + 3 tail — tight chain)
 const BLOCK = 20 // px per block (cell size — also the per-tick movement distance)
 
-// Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.
-const TICK_MS = 110
+// Time between each cell-step. ~200 ms = ~5 moves/sec — slow enough to
+// read the chain, fast enough to feel alive.
+const TICK_MS = 200
 
 // The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
 // (so it doesn't loop forever in a straight line when wandering).

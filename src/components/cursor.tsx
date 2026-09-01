@@ -247,7 +247,11 @@ export function Cursor() {
             width: `${BLOCK}px`,
             height: `${BLOCK}px`,
             opacity: 0,
-            zIndex: 100 + (LENGTH - i),
+            // z-index 0 = same stacking level as page content. Since this
+            // component renders BEFORE <Routes> in App.tsx, the snake paints
+            // first → page content paints on top → snake appears BEHIND
+            // text and other content. (Still visible against the body bg.)
+            zIndex: 0,
           }}
         />
       ))}

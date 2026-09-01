@@ -76,6 +76,19 @@ export function Cursor() {
       for (let i = 0; i < LENGTH - 1; i++) {
         positions.current[i] = positions.current[i + 1]!
       }
+
+      // Wrap EVERY block (not just the head) so the body that was near the
+      // edge also teleports through with the head — keeps the chain
+      // visually connected across wraps (no "tail disappears" when wrapping).
+      const w = window.innerWidth
+      const h = window.innerHeight
+      for (let i = 0; i < LENGTH; i++) {
+        const p = positions.current[i]!
+        if (p.x < 0) p.x += w
+        else if (p.x >= w) p.x -= w
+        if (p.y < 0) p.y += h
+        else if (p.y >= h) p.y -= h
+      }
     }
 
     function render() {

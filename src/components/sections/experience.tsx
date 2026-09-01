@@ -16,7 +16,7 @@ function formatEnd(end: string): string {
 export function Experience() {
   return (
     <FadeUp>
-      <section>
+      <section aria-label="Work experience">
         <SectionLabel
           index={2}
           title="Experience"

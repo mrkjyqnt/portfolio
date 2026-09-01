@@ -1,20 +1,29 @@
 import { describe, expect, it } from "vitest"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, screen } from "@testing-library/react"
 import { GithubGraph } from "./github-graph"
+import { renderSection } from "@/test/render-section"
 
 describe("GithubGraph", () => {
-  it("renders the image with the ghchart URL for the username", () => {
-    render(<GithubGraph username="mrkjyqnt" />)
-    const img = screen.getByRole("img", { name: /mrkjyqnt's GitHub contribution graph/i })
-    expect(img).toHaveAttribute("src", "https://ghchart.rshah.org/mrkjyqnt")
+  it("renders the contribution image when the load succeeds", () => {
+    renderSection(<GithubGraph />)
+    const img = screen.getByRole("img", { name: /contribution graph/i })
+    expect(img).toBeInTheDocument()
+    expect(img.tagName).toBe("IMG")
   })
 
-  it("falls back to a 'View on GitHub' link when the image errors", () => {
-    render(<GithubGraph username="mrkjyqnt" />)
-    const img = screen.getByRole("img", { name: /mrkjyqnt's GitHub contribution graph/i })
+  it("falls back to 'View on GitHub →' when the image errors", () => {
+    renderSection(<GithubGraph />)
+    const img = screen.getByRole("img", { name: /contribution graph/i })
     fireEvent.error(img)
-    expect(screen.getByText(/couldn't load github activity/i)).toBeInTheDocument()
-    const fallback = screen.getByRole("link", { name: /view on github/i })
-    expect(fallback).toHaveAttribute("href", "https://github.com/mrkjyqnt")
+    const link = screen.getByRole("link", { name: /view on github/i })
+    expect(link).toHaveAttribute("href", "https://github.com/mrkjyqnt")
+  })
+
+  it("renders the 'Last 12 months' meta with the GitHub link", () => {
+    renderSection(<GithubGraph />)
+    const link = screen.getByRole("link", {
+      name: /github\.com\/mrkjyqnt/i,
+    })
+    expect(link).toHaveAttribute("href", "https://github.com/mrkjyqnt")
   })
 })

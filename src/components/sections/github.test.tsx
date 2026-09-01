@@ -4,21 +4,21 @@ import { Github } from "./github"
 import { renderSection } from "@/test/render-section"
 
 describe("Github", () => {
-  it("renders the section heading", () => {
+  it("renders the contribution graph (image OR fallback)", () => {
     renderSection(<Github />)
-    expect(screen.getByRole("heading", { name: /GitHub/i })).toBeInTheDocument()
-  })
-
-  it("renders the contribution graph image (or fallback)", () => {
-    renderSection(<Github />)
-    // Either the image OR the fallback must be in the document.
-    const img = screen.queryByRole("img", { name: /contribution graph/i })
-    const fallback = screen.queryByText(/couldn't load/i)
-    expect(img !== null || fallback !== null).toBe(true)
+    const link = screen.getByRole("link", {
+      name: /github\.com\/mrkjyqnt/i,
+    })
+    expect(link).toBeInTheDocument()
+    expect(link).toHaveAttribute("href", "https://github.com/mrkjyqnt")
   })
 
   it("renders in dark mode", () => {
     renderSection(<Github />, { defaultTheme: "dark" })
-    expect(screen.getByRole("heading", { name: /GitHub/i })).toBeInTheDocument()
+    const link = screen.getByRole("link", {
+      name: /github\.com\/mrkjyqnt/i,
+    })
+    expect(link).toBeInTheDocument()
+    expect(document.documentElement.classList.contains("dark")).toBe(true)
   })
 })

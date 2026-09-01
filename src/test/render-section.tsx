@@ -17,3 +17,13 @@ export function renderSection(
     </ThemeProvider>
   )
 }
+
+/**
+ * Collect every anchor's href in the rendered tree.
+ * Returns lowercase, trimmed strings — or empty array if no anchors.
+ */
+export function getLinks(container: HTMLElement = document.body): string[] {
+  return Array.from(container.querySelectorAll("a"))
+    .map((a) => (a.getAttribute("href") ?? "").trim().toLowerCase())
+    .filter(Boolean)
+}

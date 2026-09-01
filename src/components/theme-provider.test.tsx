@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { render, screen, act } from "@testing-library/react"
 import { ThemeProvider, useTheme } from "./theme-provider"
 
@@ -61,14 +61,15 @@ describe("ThemeProvider", () => {
       removeEventListener: () => {},
       dispatchEvent: () => false,
     })) as typeof matchMedia
-    render(
-      <ThemeProvider defaultTheme="system">
-        <Consumer />
-      </ThemeProvider>
-    )
-    expect(document.documentElement.classList.contains("dark")).toBe(true)
-    window.matchMedia = matchMedia
+    try {
+      render(
+        <ThemeProvider defaultTheme="system">
+          <Consumer />
+        </ThemeProvider>
+      )
+      expect(document.documentElement.classList.contains("dark")).toBe(true)
+    } finally {
+      window.matchMedia = matchMedia
+    }
   })
 })
-
-import { vi } from "vitest"

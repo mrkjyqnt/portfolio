@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 16
-const BLOCK = 14 // px — size of each square segment (Nokia-snake-block scale)
-const GAP = 2 // px between blocks
-const STEP = BLOCK + GAP
-const LAG = 0.12 // smaller = slower chase (each block catches up less per frame)
+const LENGTH = 12
+const BLOCK = 14 // px — size of each square segment
+
+// Snake physics: every block eases toward the target in front of it each
+// frame. The head chases the cursor (not snaps to it); each body block
+// chases the block in front of it, lagging more as you go down the tail.
+const HEAD_LAG = 0.18 // head eases toward cursor
+const BODY_LAG = 0.14 // each body block eases toward the block in front
 
 type Pt = { x: number; y: number }
 
@@ -39,27 +42,28 @@ export function Cursor() {
     const cursor: Pt = { x: -9999, y: -9999 }
 
     const tick = () => {
-      // Snake physics: head eases toward cursor, every other block eases
-      // toward the block in front of it. The chain produces the trailing
-      // body lag.
-      for (let i = LENGTH - 1; i >= 0; i--) {
-        const target =
-          i === 0 ? cursor : positions.current[i - 1]!
+      // Snake physics:
+      //   - Head chases the cursor with HEAD_LAG easing (does NOT snap to
+      //     cursor — that's what made it look glued before)
+      //   - Each body block chases the block in front of it with BODY_LAG
+      //   - The chain produces the classic trailing-body lag — each segment
+      //     is a few frames behind the one ahead, so the snake visibly
+      //     stretches behind the cursor
+      const head = positions.current[0]!
+      head.x += (cursor.x - head.x) * HEAD_LAG
+      head.y += (cursor.y - head.y) * HEAD_LAG
+      for (let i = 1; i < LENGTH; i++) {
+        const target = positions.current[i - 1]!
         const cur = positions.current[i]!
-        const lag = i === 0 ? LAG * 2 : LAG
-        cur.x += (target.x - cur.x) * lag
-        cur.y += (target.y - cur.y) * lag
+        cur.x += (target.x - cur.x) * BODY_LAG
+        cur.y += (target.y - cur.y) * BODY_LAG
       }
 
       for (let i = 0; i < LENGTH; i++) {
         const el = refs.current[i]
         const p = positions.current[i]
         if (!el || !p) continue
-        // Snap to a fixed grid around the cursor position so the snake looks
-        // like blocks rather than smooth circles.
-        const snappedX = Math.round(p.x / STEP) * STEP - BLOCK / 2
-        const snappedY = Math.round(p.y / STEP) * STEP - BLOCK / 2
-        el.style.transform = `translate3d(${snappedX}px, ${snappedY}px, 0)`
+        el.style.transform = `translate3d(${p.x - BLOCK / 2}px, ${p.y - BLOCK / 2}px, 0)`
       }
 
       raf = requestAnimationFrame(tick)

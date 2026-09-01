@@ -1,4 +1,5 @@
 import { Separator } from "@/components/ui/separator"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   Hero,
   About,
@@ -13,22 +14,25 @@ import {
 
 export function App() {
   return (
-    <main>
-      <div className="mx-auto max-w-3xl space-y-12 px-6 py-12">
-        <Hero />
-        <Separator />
-        <About />
-        <Separator />
-        <Experience />
-        <Separator />
-        <Projects />
-        <Skills />
-        <WhatIWorkOn />
-        <Github />
-        <Contact />
-        <Footer />
-      </div>
-    </main>
+    <>
+      <ThemeToggle />
+      <main>
+        <div className="mx-auto max-w-3xl space-y-12 px-6 py-12">
+          <Hero />
+          <Separator />
+          <About />
+          <Separator />
+          <Experience />
+          <Separator />
+          <Projects />
+          <Skills />
+          <WhatIWorkOn />
+          <Github />
+          <Contact />
+          <Footer />
+        </div>
+      </main>
+    </>
   )
 }
 

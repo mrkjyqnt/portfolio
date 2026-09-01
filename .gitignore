@@ -41,6 +41,7 @@ Thumbs.db
 
 # Wayfinder — local-only planning artifacts, not public
 wayfinder/
+.scratch/
 
 # wayfinder research notes that should not be public (none currently)
 # wayfinder/decisions/ — kept (commit decisions as they're made)

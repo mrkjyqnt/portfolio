@@ -6,6 +6,15 @@ const BLOCK = 18 // px per block (chunkier so the chain is easy to see)
 // Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.
 const TICK_MS = 110
 
+// If true, the head eases toward the user's cursor instead of walking in
+// its own direction. Easy to flip back when the user wants the original
+// wandering behavior.
+const SNAKE_CHASES_CURSOR = true
+
+// When chasing the cursor, how fast the head moves toward it each tick.
+// 0.2 = 20% of the remaining distance per tick — visible chase, not instant.
+const CHASE_EASE = 0.2
+
 // The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
 // (so it doesn't loop forever in a straight line — it "thinks" and turns).
 const TURN_MIN_MS = 3500
@@ -34,6 +43,10 @@ const DIRECTIONS: { x: number; y: number }[] = [
  *     not just the viewport). The snake is "aware of the whole page",
  *     so when the user scrolls the snake scrolls with the page (offset by
  *     scrollX/scrollY each render) rather than staying glued to the view.
+ *   - Toggle SNAKE_CHASES_CURSOR to switch the head from walking in a
+ *     fixed direction to easing toward the user's cursor (the cursor
+ *     position is converted to page coordinates so the chase spans the
+ *     full page, not just the viewport).
  *
  * Tunables (top of file):
  *   - BLOCK          size of each cell (also the per-tick movement)
@@ -41,6 +54,9 @@ const DIRECTIONS: { x: number; y: number }[] = [
  *   - TICK_MS        time between each cell-step
  *   - TURN_MIN_MS    minimum time between random direction changes
  *   - TURN_RAND_MS   additional random delay on top of TURN_MIN_MS
+ *   - SNAKE_CHASES_CURSOR   boolean — true: head eases toward cursor;
+ *                             false (default): walks in its own direction
+ *   - CHASE_EASE     0..1 — per-tick fraction toward cursor when chasing
  */
 export function Cursor() {
   const positions = useRef(
@@ -52,6 +68,7 @@ export function Cursor() {
   const dirIdx = useRef(0) // initial heading: right
   const nextTurnAt = useRef(0) // when the snake next picks a new direction
   const scroll = useRef({ x: 0, y: 0 }) // current scroll offset
+  const cursor = useRef({ x: 0, y: 0, active: false })
 
   useEffect(() => {
     disabled.current = window.matchMedia(
@@ -84,7 +101,7 @@ export function Cursor() {
     }
 
     function step() {
-      // Snapshot the positions BEFORE the head moves. Otherwise the body
+        // Snapshot the positions BEFORE the head moves. Otherwise the body
       // shift reads the head's NEW position (just assigned) and every
       // block collapses onto the head — snake becomes a single dot.
       const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
@@ -101,11 +118,18 @@ export function Cursor() {
         window.innerHeight
       )
 
-      // Head moves one BLOCK in its current direction (page toroidal wrap).
+      // Head moves. Two modes:
+      //   - default: walks one cell in the current <DIRECTIONS> heading
+      //   - SNAKE_CHASES_CURSOR: eases toward the cursor (page coords)
       const head = positions.current[LENGTH - 1]!
-      const dir = DIRECTIONS[dirIdx.current]!
-      head.x = (head.x + dir.x * BLOCK + w) % w
-      head.y = (head.y + dir.y * BLOCK + h) % h
+      if (SNAKE_CHASES_CURSOR && cursor.current.active) {
+        head.x += (cursor.current.x - head.x) * CHASE_EASE
+        head.y += (cursor.current.y - head.y) * CHASE_EASE
+      } else {
+        const dir = DIRECTIONS[dirIdx.current]!
+        head.x += dir.x * BLOCK
+        head.y += dir.y * BLOCK
+      }
 
       // Body trails: each block takes the position of the block IN FRONT
       // of it from BEFORE this tick.
@@ -124,8 +148,11 @@ export function Cursor() {
       }
 
       // Periodic random direction change so the snake doesn't loop forever
-      // in a straight line.
-      if (performance.now() >= nextTurnAt.current) {
+      // in a straight line. Skip when chasing cursor (it just follows).
+      if (
+        !SNAKE_CHASES_CURSOR &&
+        performance.now() >= nextTurnAt.current
+      ) {
         pickRandomTurn()
         nextTurnAt.current =
           performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
@@ -173,11 +200,26 @@ export function Cursor() {
       scroll.current.x = window.scrollX
       scroll.current.y = window.scrollY
     }
+    const onMove = (e: MouseEvent) => {
+      // Convert viewport (clientX/Y) to page coordinates by adding the
+      // current scroll offset. Then the snake chases the cursor across
+      // the entire page, not just the visible viewport.
+      cursor.current.x = e.clientX + window.scrollX
+      cursor.current.y = e.clientY + window.scrollY
+      cursor.current.active = true
+    }
+    const onLeave = () => {
+      cursor.current.active = false
+    }
     window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseleave", onLeave)
 
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseleave", onLeave)
     }
   }, [])
 

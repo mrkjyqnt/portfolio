@@ -39,5 +39,8 @@ Thumbs.db
 .cache/
 .turbo/
 
+# Wayfinder — local-only planning artifacts, not public
+wayfinder/
+
 # wayfinder research notes that should not be public (none currently)
 # wayfinder/decisions/ — kept (commit decisions as they're made)

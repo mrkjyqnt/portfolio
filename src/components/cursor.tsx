@@ -11,9 +11,10 @@ const TICK_MS = 110
 // wandering behavior.
 const SNAKE_CHASES_CURSOR = true
 
-// When chasing the cursor, how fast the head moves toward it each tick.
-// 0.2 = 20% of the remaining distance per tick — visible chase, not instant.
-const CHASE_EASE = 0.2
+// When chasing the cursor, how fast each block moves toward its target
+// each tick. 0.25 = 25% of remaining distance per tick — smooth pixel-by-
+// pixel motion (no instant snapping to the target).
+const CHASE_EASE = 0.25
 
 // The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
 // (so it doesn't loop forever in a straight line — it "thinks" and turns).
@@ -101,14 +102,8 @@ export function Cursor() {
     }
 
     function step() {
-        // Snapshot the positions BEFORE the head moves. Otherwise the body
-      // shift reads the head's NEW position (just assigned) and every
-      // block collapses onto the head — snake becomes a single dot.
-      const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
-
-      // Page-aware bounds: snake wraps around the entire document, not just
-      // the current viewport. scrollWidth/scrollHeight covers the full page
-      // content even past the initial fold.
+        // Page-aware bounds: snake wraps around the entire document, not just
+      // the current viewport.
       const w = Math.max(
         document.documentElement.scrollWidth,
         window.innerWidth
@@ -118,23 +113,37 @@ export function Cursor() {
         window.innerHeight
       )
 
-      // Head moves. Two modes:
-      //   - default: walks one cell in the current <DIRECTIONS> heading
-      //   - SNAKE_CHASES_CURSOR: eases toward the cursor (page coords)
-      const head = positions.current[LENGTH - 1]!
+      // Two movement modes:
+      //   - SNAKE_CHASES_CURSOR (smooth): head and every body block ease
+      //     toward their target each tick → true pixel-by-pixel motion.
+      //     Block i eases toward the previous position of block i+1
+      //     (which itself just moved), so the chain stretches behind.
+      //   - default (Nokia-step): head moves one BLOCK per tick, each
+      //     body block takes the previous tick's position of the block
+      //     in front — discrete steps.
       if (SNAKE_CHASES_CURSOR && cursor.current.active) {
+        const head = positions.current[LENGTH - 1]!
         head.x += (cursor.current.x - head.x) * CHASE_EASE
         head.y += (cursor.current.y - head.y) * CHASE_EASE
+        // Each block eases toward the position of the block in front of
+        // it (the chain stretches toward the cursor with the same ease).
+        for (let i = LENGTH - 2; i >= 0; i--) {
+          const cur = positions.current[i]!
+          const next = positions.current[i + 1]!
+          cur.x += (next.x - cur.x) * CHASE_EASE
+          cur.y += (next.y - cur.y) * CHASE_EASE
+        }
       } else {
+        // Snapshot before moving so the body shift uses the previous tick's
+        // position of the block in front (not the head's NEW position).
+        const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
+        const head = positions.current[LENGTH - 1]!
         const dir = DIRECTIONS[dirIdx.current]!
         head.x += dir.x * BLOCK
         head.y += dir.y * BLOCK
-      }
-
-      // Body trails: each block takes the position of the block IN FRONT
-      // of it from BEFORE this tick.
-      for (let i = 0; i < LENGTH - 1; i++) {
-        positions.current[i] = snapshot[i + 1]
+        for (let i = 0; i < LENGTH - 1; i++) {
+          positions.current[i] = snapshot[i + 1]
+        }
       }
 
       // Wrap every block within the page bounds so the whole chain
@@ -147,8 +156,8 @@ export function Cursor() {
         else if (p.y >= h) p.y -= h
       }
 
-      // Periodic random direction change so the snake doesn't loop forever
-      // in a straight line. Skip when chasing cursor (it just follows).
+      // Periodic random direction change so the wandering snake doesn't
+      // loop forever in a straight line. Skip when chasing cursor.
       if (
         !SNAKE_CHASES_CURSOR &&
         performance.now() >= nextTurnAt.current

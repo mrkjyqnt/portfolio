@@ -51,6 +51,11 @@ export function Cursor() {
   const positions = useRef(
     Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
   )
+  // Each block's cell at the START of the current tick. Used for smooth
+  // interpolation between ticks (lerp from prev → current over TICK_MS).
+  const prevCells = useRef(
+    Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
+  )
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
@@ -153,10 +158,10 @@ export function Cursor() {
       head.y += wrapY
 
       // Body shift: each block takes the cell the block in front of it
-      // occupied at the start of this tick (from the snapshot), with the
+      // occupied at the start of this tick (from prevCells), with the
       // same wrap delta applied so the chain shape is preserved.
       for (let i = 0; i < LENGTH - 1; i++) {
-        const sw = snapshot[i + 1]!
+        const sw = prevCells.current[i + 1]!
         positions.current[i]!.x = sw.x + wrapX
         positions.current[i]!.y = sw.y + wrapY
       }
@@ -172,33 +177,48 @@ export function Cursor() {
       }
     }
 
-    function render() {
-      // Subtract scroll so the snake moves with the page content rather
-      // than staying glued to the viewport.
+    function render(progress: number) {
+      // Each block smoothly slides from its previous cell (prevCells[i])
+      // to its current cell (positions[i]) over the tick duration. progress
+      // goes 0..1 across TICK_MS. This makes the snake look like a real
+      // Nokia snake gliding cell-to-cell instead of teleporting.
       const sx = scroll.current.x
       const sy = scroll.current.y
       for (let i = 0; i < LENGTH; i++) {
         const el = refs.current[i]
-        const p = positions.current[i]
-        if (!el || !p) continue
-        el.style.transform = `translate3d(${p.x - sx}px, ${p.y - sy}px, 0)`
+        const prev = prevCells.current[i]
+        const cur = positions.current[i]
+        if (!el || !prev || !cur) continue
+        const x = prev.x + (cur.x - prev.x) * progress - sx
+        const y = prev.y + (cur.y - prev.y) * progress - sy
+        el.style.transform = `translate3d(${x}px, ${y}px, 0)`
       }
     }
 
     function tick() {
       const now = performance.now()
-      if (now - lastTickAt.current >= TICK_MS) {
+      const elapsed = now - lastTickAt.current
+      if (elapsed >= TICK_MS) {
         step()
-        render()
         lastTickAt.current = now
       }
+      // Render every frame with the current tick's interpolation progress
+      // (clamped to 0..1 so a long frame after a tick doesn't overshoot).
+      const progress = Math.min(1, elapsed / TICK_MS)
+      render(progress)
       raf = requestAnimationFrame(tick)
     }
 
     lastTickAt.current = performance.now()
     nextTurnAt.current =
       performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
-    render()
+    // Seed prevCells to positions so the initial render doesn't lerp
+    // from (0,0) on first frame.
+    for (let i = 0; i < LENGTH; i++) {
+      prevCells.current[i]!.x = positions.current[i]!.x
+      prevCells.current[i]!.y = positions.current[i]!.y
+    }
+    render(0)
 
     requestAnimationFrame(() => {
       for (const el of refs.current) {

@@ -51,11 +51,11 @@ export function Cursor() {
   const positions = useRef(
     Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
   )
-  // Each block's cell at the START of the current tick. Used for smooth
-  // interpolation between ticks (lerp from prev → current over TICK_MS).
-  const prevCells = useRef(
-    Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
-  )
+  // History of the head's cell, one entry per tick (capped at LENGTH-1).
+  // Block N-1 (just behind the head) takes head[1-tick-ago], block N-2
+  // takes head[2-ticks-ago], etc. This makes the body stretch out from the
+  // head as a real Nokia snake — NOT collapse onto the head.
+  const headHistory = useRef<{ x: number; y: number }[]>([])
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
@@ -82,17 +82,28 @@ export function Cursor() {
   useEffect(() => {
     if (disabled.current) return
 
-    // Snap the head seed to the grid and lay the body out one cell apart.
+    // Snap the head seed to the grid.
     const startX = BLOCK * 4
     const startY = BLOCK * 2
-    for (let i = 0; i < LENGTH; i++) {
+    const headSeed = {
+      x: Math.round(startX / BLOCK) * BLOCK,
+      y: Math.round(startY / BLOCK) * BLOCK,
+    }
+    positions.current[LENGTH - 1] = { x: headSeed.x, y: headSeed.y }
+    // Seed the history with the head's initial position so the body has
+    // something to reference on the first ticks.
+    for (let i = 0; i < LENGTH - 1; i++) {
+      headHistory.current.push({ x: headSeed.x, y: headSeed.y })
+    }
+    // Place the initial body as if the snake had been moving toward its
+    // initial heading (right) for LENGTH-1 ticks — gives a chain from the
+    // start.
+    for (let i = 0; i < LENGTH - 1; i++) {
       positions.current[i] = {
-        x: Math.round(startX / BLOCK) * BLOCK,
-        y: Math.round(startY / BLOCK) * BLOCK,
+        x: headSeed.x - (LENGTH - 1 - i) * BLOCK,
+        y: headSeed.y,
       }
     }
-    // Shift the body leftward from the head so the snake points right
-    positions.current[0]!.x -= (LENGTH - 1) * BLOCK
 
     let raf = 0
 
@@ -179,6 +190,8 @@ export function Cursor() {
       // We use this exact wrap amount for every body block too, so the
       // whole chain teleports together as one creature instead of head
       // wrapping while the body stays put (which collapses the chain).
+      const oldHeadX = head.x
+      const oldHeadY = head.y
       head.x += stepX
       head.y += stepY
       const wrapX = head.x < 0 ? w : head.x >= w ? -w : 0
@@ -186,13 +199,23 @@ export function Cursor() {
       head.x += wrapX
       head.y += wrapY
 
-      // Body shift: each block takes the cell the block in front of it
-      // occupied at the start of this tick (from prevCells), with the
-      // same wrap delta applied so the chain shape is preserved.
+      // Body: block L-1-i takes head position from (i+1) ticks ago, with
+      // the same wrap delta applied so the chain shape is preserved across
+      // wraps. Using a history queue (instead of a 1-tick snapshot) is the
+      // difference between "body collapses onto head" and "body stretches
+      // out behind head like a real snake".
       for (let i = 0; i < LENGTH - 1; i++) {
-        const sw = prevCells.current[i + 1]!
-        positions.current[i]!.x = sw.x + wrapX
-        positions.current[i]!.y = sw.y + wrapY
+        const past = headHistory.current[i]
+        if (!past) continue
+        positions.current[i]!.x = past.x + wrapX
+        positions.current[i]!.y = past.y + wrapY
+      }
+
+      // Push the head's PRE-move cell onto the history (the cell it just
+      // left). The new head cell will be pushed at the start of next tick.
+      headHistory.current.unshift({ x: oldHeadX, y: oldHeadY })
+      if (headHistory.current.length > LENGTH - 1) {
+        headHistory.current.length = LENGTH - 1
       }
 
       // Periodic random turn (wandering mode only — chase just follows).
@@ -207,20 +230,24 @@ export function Cursor() {
     }
 
     function render(progress: number) {
-      // Each block smoothly slides from its previous cell (prevCells[i])
-      // to its current cell (positions[i]) over the tick duration. progress
-      // goes 0..1 across TICK_MS. This makes the snake look like a real
-      // Nokia snake gliding cell-to-cell instead of teleporting.
+      // The head smoothly interpolates from its previous cell to its current
+      // cell over the tick duration. The body snaps to its current cell
+      // (it was already placed there by step()).
       const sx = scroll.current.x
       const sy = scroll.current.y
-      for (let i = 0; i < LENGTH; i++) {
+      const headEl = refs.current[LENGTH - 1]
+      const headCur = positions.current[LENGTH - 1]!
+      if (headEl) {
+        const lastHead = headHistory.current[0] ?? headCur
+        const x = lastHead.x + (headCur.x - lastHead.x) * progress - sx
+        const y = lastHead.y + (headCur.y - lastHead.y) * progress - sy
+        headEl.style.transform = `translate3d(${x}px, ${y}px, 0)`
+      }
+      for (let i = 0; i < LENGTH - 1; i++) {
         const el = refs.current[i]
-        const prev = prevCells.current[i]
         const cur = positions.current[i]
-        if (!el || !prev || !cur) continue
-        const x = prev.x + (cur.x - prev.x) * progress - sx
-        const y = prev.y + (cur.y - prev.y) * progress - sy
-        el.style.transform = `translate3d(${x}px, ${y}px, 0)`
+        if (!el || !cur) continue
+        el.style.transform = `translate3d(${cur.x - sx}px, ${cur.y - sy}px, 0)`
       }
     }
 
@@ -241,12 +268,6 @@ export function Cursor() {
     lastTickAt.current = performance.now()
     nextTurnAt.current =
       performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
-    // Seed prevCells to positions so the initial render doesn't lerp
-    // from (0,0) on first frame.
-    for (let i = 0; i < LENGTH; i++) {
-      prevCells.current[i]!.x = positions.current[i]!.x
-      prevCells.current[i]!.y = positions.current[i]!.y
-    }
     render(0)
 
     requestAnimationFrame(() => {

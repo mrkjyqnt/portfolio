@@ -118,10 +118,6 @@ export function Cursor() {
         window.innerHeight
       )
 
-      // Snapshot before the head moves, so the body shift reads the
-      // previous tick's position of each block (not the head's NEW cell).
-      const snapshot = positions.current.map((p) => ({ x: p.x, y: p.y }))
-
       // Decide the head's step this tick:
       //   - CHASE + head on cursor cell: enter ORBIT mode. Head cycles
       //     around the cursor's cell (right → down → left → up → repeat)

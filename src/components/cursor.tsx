@@ -6,8 +6,12 @@ const BLOCK = 18 // px per block (chunkier so the chain is easy to see)
 // Time between each cell-step. ~110 ms = ~9 moves/sec, like the Nokia Snake.
 const TICK_MS = 110
 
-// 4 cardinal directions only (no diagonals). The snake keeps one heading
-// and wraps toroidally — no turning.
+// The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
+// (so it doesn't loop forever in a straight line — it "thinks" and turns).
+const TURN_MIN_MS = 3500
+const TURN_RAND_MS = 4000
+
+// 4 cardinal directions only (no diagonals). The snake wraps toroidally.
 const DIRECTIONS: { x: number; y: number }[] = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -24,14 +28,19 @@ const DIRECTIONS: { x: number; y: number }[] = [
  *   - Each body block takes the position the block in front of it had at
  *     the last tick (1-tick delay per segment). The body forms a connected
  *     chain of BLOCK-sized squares — not separated dots, not overlapping.
- *   - The snake walks in a straight line and TELEPORTS through every
- *     viewport edge — reappears on the opposite side (toroidal wrap).
- *     No turning.
+ *   - The snake walks in a straight line, periodically picks a new
+ *     cardinal direction, and TELEPORTS through every viewport edge —
+ *     reappears on the opposite side (toroidal wrap).
+ *   - The snake's position is page-anchored: subtracts `window.scrollY`
+ *     each render so the snake stays anchored to the page content (it
+ *     scrolls out of view as the user scrolls, not pinned to the viewport).
  *
  * Tunables (top of file):
  *   - BLOCK          size of each cell (also the per-tick movement)
  *   - LENGTH         number of blocks in the snake
  *   - TICK_MS        time between each cell-step
+ *   - TURN_MIN_MS    minimum time between random direction changes
+ *   - TURN_RAND_MS   additional random delay on top of TURN_MIN_MS
  */
 export function Cursor() {
   const positions = useRef(
@@ -41,6 +50,8 @@ export function Cursor() {
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
   const dirIdx = useRef(0) // initial heading: right
+  const nextTurnAt = useRef(0) // when the snake next picks a new direction
+  const scrollY = useRef(0) // current scrollY offset for page-anchoring
 
   useEffect(() => {
     disabled.current = window.matchMedia(
@@ -60,6 +71,18 @@ export function Cursor() {
     }
 
     let raf = 0
+
+    function pickRandomTurn() {
+      // Avoid flipping 180° (sudden U-turn looks unnatural).
+      const opposite = (dirIdx.current + 2) % 4
+      let next = Math.floor(Math.random() * 4)
+      let tries = 0
+      while ((next === dirIdx.current || next === opposite) && tries < 4) {
+        next = Math.floor(Math.random() * 4)
+        tries++
+      }
+      dirIdx.current = next
+    }
 
     function step() {
       // One Nokia-style step: head moves BLOCK pixels in its current
@@ -89,14 +112,26 @@ export function Cursor() {
         if (p.y < 0) p.y += h
         else if (p.y >= h) p.y -= h
       }
+
+      // Periodic random direction change (every TURN_MIN..TURN_MIN+TURN_RAND
+      // ms) so the snake doesn't loop forever in a straight line.
+      if (performance.now() >= nextTurnAt.current) {
+        pickRandomTurn()
+        nextTurnAt.current =
+          performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
+      }
     }
 
     function render() {
+      // Subtract scrollY so the snake stays anchored to the page content.
+      // As the user scrolls, the snake moves with the page (it scrolls
+      // out of view), not pinned to the viewport.
+      const ys = scrollY.current
       for (let i = 0; i < LENGTH; i++) {
         const el = refs.current[i]
         const p = positions.current[i]
         if (!el || !p) continue
-        el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0)`
+        el.style.transform = `translate3d(${p.x}px, ${p.y - ys}px, 0)`
       }
     }
 
@@ -112,6 +147,8 @@ export function Cursor() {
 
     // Initial render so blocks are visible at the seed position.
     lastTickAt.current = performance.now()
+    nextTurnAt.current =
+      performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
     render()
     requestAnimationFrame(() => {
       for (const el of refs.current) {
@@ -120,8 +157,14 @@ export function Cursor() {
       raf = requestAnimationFrame(tick)
     })
 
+    const onScroll = () => {
+      scrollY.current = window.scrollY
+    }
+    window.addEventListener("scroll", onScroll, { passive: true })
+
     return () => {
       cancelAnimationFrame(raf)
+      window.removeEventListener("scroll", onScroll)
     }
   }, [])
 

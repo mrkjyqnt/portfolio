@@ -135,7 +135,7 @@ export function ProjectPage() {
       {/* OVERVIEW */}
       <FadeUp>
         <section aria-label="Overview" className="space-y-6">
-          <SectionLabel index={1} title="Overview" />
+          <SectionLabel title="Overview" />
           <p className="text-base leading-relaxed text-foreground/85">
             {project.overview}
           </p>
@@ -148,7 +148,6 @@ export function ProjectPage() {
       <FadeUp>
         <section aria-label="How it works" className="space-y-6">
           <SectionLabel
-            index={2}
             title="How it works"
             hint={`${project.howItWorks.length} parts`}
           />
@@ -166,7 +165,6 @@ export function ProjectPage() {
       <FadeUp>
         <section aria-label="Tech stack" className="space-y-6">
           <SectionLabel
-            index={3}
             title="Tech stack"
             hint={`${project.techStack.length} tools`}
           />

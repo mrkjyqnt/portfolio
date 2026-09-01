@@ -7,7 +7,6 @@ export function Github() {
     <FadeUp>
       <section>
         <SectionLabel
-          index={6}
           title="GitHub"
           hint="Public activity"
         />

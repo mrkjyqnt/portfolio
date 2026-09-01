@@ -8,7 +8,6 @@ export function WhatIWorkOn() {
     <FadeUp>
       <section>
         <SectionLabel
-          index={5}
           title="What I work on"
           hint="Right now"
         />

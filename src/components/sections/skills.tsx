@@ -61,7 +61,6 @@ export function Skills() {
     <FadeUp>
       <section>
         <SectionLabel
-          index={4}
           title="Skills"
           hint="Where I spend my time"
         />

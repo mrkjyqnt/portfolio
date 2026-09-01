@@ -7,7 +7,6 @@ export function About() {
     <FadeUp>
       <section>
         <SectionLabel
-          index={1}
           title="About"
           hint="Who I am, where I work"
         />

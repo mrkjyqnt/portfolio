@@ -8,7 +8,7 @@ export function Contact() {
   return (
     <FadeUp>
       <section>
-        <SectionLabel index={7} title="Get in touch" />
+        <SectionLabel title="Get in touch" />
         <p className="text-base leading-relaxed text-foreground/85">
           Open to roles and freelance work. Email is the fastest way to reach
           me.

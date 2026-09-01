@@ -85,20 +85,16 @@ export function Projects() {
     <FadeUp>
       <section>
         <SectionLabel
-          index={3}
           title="Selected work"
           hint={`${projects.length} shipped`}
         />
         <div className="divide-y divide-border rounded-md border border-border">
-          {projects.map((p, idx) => (
+          {projects.map((p) => (
             <article
               key={p.title}
               className="group relative space-y-2 p-5 transition first:pt-6 last:pb-6 hover:bg-muted/40 hover:pl-6"
             >
               <span className="absolute bottom-0 left-0 top-0 w-0.5 origin-top scale-y-0 bg-primary transition-transform duration-300 group-hover:scale-y-100" />
-              <span className="font-mono text-xs tabular-nums text-primary">
-                0{idx + 1} / 0{projects.length}
-              </span>
               <header className="flex items-start justify-between gap-2">
                 <h3 className="text-base font-semibold transition group-hover:text-primary">
                   {p.title}

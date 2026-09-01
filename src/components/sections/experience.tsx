@@ -17,7 +17,6 @@ export function Experience() {
     <FadeUp>
       <section aria-label="Work experience">
         <SectionLabel
-          index={2}
           title="Experience"
           hint={`${experience.length} role`}
         />

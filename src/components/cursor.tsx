@@ -1,61 +1,30 @@
 import { useEffect, useRef } from "react"
 
-const LENGTH = 5 // total blocks (head + 4 tail — tight stick)
-const BLOCK = 18 // px per block (cell size = per-tick movement distance)
-
-// Time between each cell-step. ~150 ms = ~6.5 moves/sec.
-const TICK_MS = 150
-
-// The snake picks a new direction every TURN_MIN..TURN_MIN+TURN_RAND ms
-// (so it doesn't loop forever in a straight line when wandering).
-const TURN_MIN_MS = 3500
-const TURN_RAND_MS = 4000
-
-// If true, the head chases the user's cursor. If false, the snake
-// wanders (walks in its own direction).
-const SNAKE_CHASES_CURSOR = true
-
-// 4 cardinal directions only.
-const DIRECTIONS: { x: number; y: number }[] = [
-  { x: 1, y: 0 },
-  { x: 0, y: 1 },
-  { x: -1, y: 0 },
-  { x: 0, y: -1 },
-]
+const LENGTH = 6 // total blocks (head + 5 tail)
+const BLOCK = 20 // px per block
 
 type Pt = { x: number; y: number }
 
 /**
- * Autonomous pixelated snake on a fixed grid. Classic Nokia-Snake
- * physics, no over-engineering:
- *  - One BLOCK per tick (cell-per-cell movement).
- *  - Body = FIFO shift: each block takes the cell the block in front of
- *    it occupied at the start of this tick. Body hugs the head with one
- *    cell of lag — a connected chain that always moves together.
- *  - Every frame interpolates each block from its previous cell to its
- *    new cell so the whole chain glides smoothly between ticks.
- *  - Toroidal wrap on page bounds; snake is page-anchored (renders
- *    with scrollX/scrollY subtracted so it scrolls with the page).
- *  - In chase mode, the head orbits the cursor cell in a 4-square loop
- *    when it arrives there, instead of being dragged back each tick.
+ * Simple, slow pixelated snake. The head eases toward the cursor at
+ * ~60 fps with very low per-frame speed (1 px per frame at most). The body
+ * follows by copying the head's previous position with a fixed 1-frame
+ * delay per segment. No wrap, no orbit, no collision respawn — if the
+ * head goes off-screen, the snake follows naturally. Smooth per-frame
+ * interpolation = no visible stepping.
  */
 export function Cursor() {
-  // positions[i] = each block's cell at the END of the current tick.
-  const positions = useRef<Pt[]>(
-    Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
-  )
-  // prevBlocks[i] = each block's cell at the START of the current tick.
-  // The render function interpolates from prevBlocks[i] → positions[i].
-  const prevBlocks = useRef<Pt[]>(
-    Array.from({ length: LENGTH }, () => ({ x: 0, y: 0 }))
+  // head = current head position; body[i] = position of block i+1 tick ago.
+  const head = useRef<Pt>({ x: 0, y: 0 })
+  const body = useRef<Pt[]>(
+    Array.from({ length: LENGTH - 1 }, () => ({ x: 0, y: 0 }))
   )
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const disabled = useRef(false)
-  const lastTickAt = useRef(0)
-  const dirIdx = useRef(0) // initial heading: right
-  const nextTurnAt = useRef(0)
-  const scroll = useRef({ x: 0, y: 0 })
   const cursor = useRef({ x: 0, y: 0, active: false })
+  const scroll = useRef({ x: 0, y: 0 })
+  // Head's previous cell (for detecting cell-boundary crossings).
+  const prevHeadCell = useRef<Pt>({ x: -9999, y: -9999 })
 
   useEffect(() => {
     disabled.current = window.matchMedia(
@@ -66,190 +35,96 @@ export function Cursor() {
   useEffect(() => {
     if (disabled.current) return
 
-    // Snap the head seed to the grid.
-    const startX = BLOCK * 4
-    const startY = BLOCK * 2
-    const headSeed = {
-      x: Math.round(startX / BLOCK) * BLOCK,
-      y: Math.round(startY / BLOCK) * BLOCK,
-    }
-    // Lay the body out one cell apart behind the head, as if the snake
-    // had been moving toward (+x, 0) for LENGTH-1 ticks.
-    for (let i = 0; i < LENGTH; i++) {
-      positions.current[i] = {
-        x: headSeed.x - (LENGTH - 1 - i) * BLOCK,
-        y: headSeed.y,
-      }
-    }
-
     let raf = 0
 
-    function pickRandomTurn() {
-      const opposite = (dirIdx.current + 2) % 4
-      let next = Math.floor(Math.random() * 4)
-      let tries = 0
-      while ((next === dirIdx.current || next === opposite) && tries < 4) {
-        next = Math.floor(Math.random() * 4)
-        tries++
-      }
-      dirIdx.current = next
-    }
+    function tick() {
+      const targetX = cursor.current.active
+        ? cursor.current.x + scroll.current.x
+        : head.current.x
+      const targetY = cursor.current.active
+        ? cursor.current.y + scroll.current.y
+        : head.current.y
 
-    function step() {
-      // Snapshot every block's CURRENT cell into prevBlocks so the render
-      // function can interpolate from each block's old cell to its new
-      // cell across the tick. Snapshotted BEFORE any updates this tick.
-      for (let i = 0; i < LENGTH; i++) {
-        prevBlocks.current[i]!.x = positions.current[i]!.x
-        prevBlocks.current[i]!.y = positions.current[i]!.y
+      // Move head toward target.
+      const dx = targetX - head.current.x
+      const dy = targetY - head.current.y
+      const dist = Math.hypot(dx, dy)
+      if (dist > 0) {
+        const step = Math.min(2, dist)
+        head.current.x += (dx / dist) * step
+        head.current.y += (dy / dist) * step
       }
 
-      // Page bounds for wrap.
-      const w = Math.max(
-        document.documentElement.scrollWidth,
-        window.innerWidth
-      )
-      const h = Math.max(
-        document.documentElement.scrollHeight,
-        window.innerHeight
-      )
-
-      // Decide the head's step this tick (simple chase — no orbit,
-      // no random turns; one cardinal direction per tick, the one that
-      // heads most toward the cursor cell).
-      const head = positions.current[LENGTH - 1]!
-      let stepX = 0
-      let stepY = 0
-      if (SNAKE_CHASES_CURSOR && cursor.current.active) {
-        const tgx = Math.round(cursor.current.x / BLOCK) * BLOCK
-        const tgy = Math.round(cursor.current.y / BLOCK) * BLOCK
-        const dx = tgx - head.x
-        const dy = tgy - head.y
-        if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
-          stepX = Math.sign(dx) * BLOCK
-        } else if (dy !== 0) {
-          stepY = Math.sign(dy) * BLOCK
+      // Cell-boundary crossing: when the head's snapped cell changes,
+      // push the OLD cell onto the body queue. Now the body is always
+      // 1 cell (20px) behind each other — a real visible chain instead
+      // of a packed cluster at the head.
+      const cellX = Math.round(head.current.x / BLOCK) * BLOCK
+      const cellY = Math.round(head.current.y / BLOCK) * BLOCK
+      if (cellX !== prevHeadCell.current.x || cellY !== prevHeadCell.current.y) {
+        if (prevHeadCell.current.x >= 0) {
+          body.current.unshift({ x: prevHeadCell.current.x, y: prevHeadCell.current.y })
+          if (body.current.length > LENGTH - 1) {
+            body.current.length = LENGTH - 1
+          }
         }
-      } else {
-        const dir = DIRECTIONS[dirIdx.current]!
-        stepX = dir.x * BLOCK
-        stepY = dir.y * BLOCK
+        prevHeadCell.current = { x: cellX, y: cellY }
       }
 
-      // 1. Move head FIRST (with toroidal wrap).
-      head.x += stepX
-      head.y += stepY
-      const wrapX = head.x < 0 ? w : head.x >= w ? -w : 0
-      const wrapY = head.y < 0 ? h : head.y >= h ? -h : 0
-      head.x += wrapX
-      head.y += wrapY
-
-      // 2. Body shift using the PRE-HEAD-MOVE snapshot. block[i] takes
-      //    block[i+1]'s old cell — i.e., each body block slides into the
-      //    cell the block in front of it was in at the start of this tick.
-      //    The head (positions[L-1]) is NOT touched here — it's already
-      //    at its new cell from step 1.
-      for (let i = LENGTH - 2; i >= 0; i--) {
-        positions.current[i]!.x = prevBlocks.current[i + 1]!.x + wrapX
-        positions.current[i]!.y = prevBlocks.current[i + 1]!.y + wrapY
-      }
-
-      // Periodic random turn (wandering mode only).
-      if (
-        !SNAKE_CHASES_CURSOR &&
-        performance.now() >= nextTurnAt.current
-      ) {
-        pickRandomTurn()
-        nextTurnAt.current =
-          performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
-      }
-
-      // Self-collision: if the head landed on a body segment, the
-      // snake "dies" — we respawn the chain at its initial seed. Each
-      // tick still keeps moving, so the snake keeps chasing / wandering;
-      // a respawn just resets the chain shape.
-      for (let i = 0; i < LENGTH - 1; i++) {
-        if (
-          positions.current[LENGTH - 1]!.x === positions.current[i]!.x &&
-          positions.current[LENGTH - 1]!.y === positions.current[i]!.y
-        ) {
-          respawn()
-          break
-        }
-      }
-    }
-
-    function respawn() {
-      const startX = BLOCK * 4
-      const startY = BLOCK * 2
-      for (let i = 0; i < LENGTH; i++) {
-        positions.current[i] = {
-          x: startX - (LENGTH - 1 - i) * BLOCK,
-          y: startY,
-        }
-        prevBlocks.current[i] = { x: positions.current[i]!.x, y: positions.current[i]!.y }
-      }
-    }
-
-    function render(progress: number) {
+      // Render: head at its current position, body block i at body[i].
+      // Subtract scroll so the snake moves with the page (z-index: -1
+      // + position: fixed is handled by CSS).
       const sx = scroll.current.x
       const sy = scroll.current.y
-      for (let i = 0; i < LENGTH; i++) {
-        const el = refs.current[i]
-        const prev = prevBlocks.current[i]
-        const cur = positions.current[i]
-        if (!el || !prev || !cur) continue
-        const x = prev.x + (cur.x - prev.x) * progress - sx
-        const y = prev.y + (cur.y - prev.y) * progress - sy
-        el.style.transform = `translate3d(${x}px, ${y}px, 0)`
+      render(refs.current[LENGTH - 1], head.current.x - sx, head.current.y - sy)
+      for (let i = 0; i < LENGTH - 1; i++) {
+        const p = body.current[i]
+        if (!p) continue
+        render(refs.current[i], p.x - sx, p.y - sy)
       }
-    }
 
-    function tick() {
-      const now = performance.now()
-      const elapsed = now - lastTickAt.current
-      if (elapsed >= TICK_MS) {
-        step()
-        lastTickAt.current = now
-      }
-      const progress = Math.min(1, elapsed / TICK_MS)
-      render(progress)
       raf = requestAnimationFrame(tick)
     }
 
-    lastTickAt.current = performance.now()
-    nextTurnAt.current =
-      performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
-    render(0)
+    function render(el: HTMLDivElement | null, x: number, y: number) {
+      if (!el) return
+      el.style.transform = `translate3d(${x - BLOCK / 2}px, ${y - BLOCK / 2}px, 0)`
+    }
 
     requestAnimationFrame(() => {
+      // Seed head + body in a visible area so the chain is visible from
+      // the first frame.
+      head.current = { x: 200, y: 200 }
+      for (let i = 0; i < LENGTH - 1; i++) {
+        body.current[i] = { x: 200 - (i + 1) * BLOCK, y: 200 }
+      }
       for (const el of refs.current) {
         if (el) el.style.opacity = "1"
       }
       raf = requestAnimationFrame(tick)
     })
 
-    const onScroll = () => {
-      scroll.current.x = window.scrollX
-      scroll.current.y = window.scrollY
-    }
     const onMove = (e: MouseEvent) => {
-      cursor.current.x = e.clientX + window.scrollX
-      cursor.current.y = e.clientY + window.scrollY
+      cursor.current.x = e.clientX
+      cursor.current.y = e.clientY
       cursor.current.active = true
     }
     const onLeave = () => {
       cursor.current.active = false
     }
-    window.addEventListener("scroll", onScroll, { passive: true })
+    const onScroll = () => {
+      scroll.current.x = window.scrollX
+      scroll.current.y = window.scrollY
+    }
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseleave", onLeave)
+    window.addEventListener("scroll", onScroll, { passive: true })
 
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener("scroll", onScroll)
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mouseleave", onLeave)
+      window.removeEventListener("scroll", onScroll)
     }
   }, [])
 
@@ -269,10 +144,6 @@ export function Cursor() {
             width: `${BLOCK}px`,
             height: `${BLOCK}px`,
             opacity: 0,
-            // Negative z-index + position: fixed → paints behind any
-            // content (z-index 0 or auto). mix-blend-difference inverts
-            // against any background so the dim snake is always visible
-            // (lighter over dark, darker over light).
             zIndex: -1,
           }}
         />

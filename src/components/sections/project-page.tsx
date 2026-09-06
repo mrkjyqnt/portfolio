@@ -1,8 +1,32 @@
+import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { ArrowLeft, ArrowRight, ExternalLink } from "lucide-react"
 import { SiGithub } from "react-icons/si"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+
+function ProjectScreenshot({ src, alt }: { src: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <div className="relative overflow-hidden rounded-lg border border-border bg-muted/30 shadow-sm">
+      {!loaded && (
+        <Skeleton className="absolute inset-0 h-full w-full rounded-none" />
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={
+          "block w-full transition-opacity duration-500 " +
+          (loaded ? "opacity-100" : "opacity-0")
+        }
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+      />
+    </div>
+  )
+}
 import { Separator } from "@/components/ui/separator"
 import { FadeUp } from "@/components/motion/fade-up"
 import { SectionLabel } from "./section-label"
@@ -135,14 +159,10 @@ export function ProjectPage() {
       {/* SCREENSHOT */}
       <FadeUp>
         <figure className="space-y-3">
-          <div className="overflow-hidden rounded-lg border border-border bg-muted/30 shadow-sm">
-            <img
-              src={project.screenshot}
-              alt={`${project.title} — ${project.screenshotCaption}`}
-              className="block w-full"
-              loading="lazy"
-            />
-          </div>
+          <ProjectScreenshot
+            src={project.screenshot}
+            alt={`${project.title} — ${project.screenshotCaption}`}
+          />
           <figcaption className="text-xs text-muted-foreground">
             {project.screenshotCaption}
           </figcaption>

@@ -52,11 +52,7 @@ export function Cursor() {
   const refs = useRef<(HTMLDivElement | null)[]>([])
   const disabled = useRef(false)
   const lastTickAt = useRef(0)
-  const dirIdx = useRef(0)
-  // Orbit state — see step() for the chase+orbit logic.
-  const orbitStep = useRef(0)
-  const orbiting = useRef(false)
-  const orbitCenter = useRef({ x: 0, y: 0 })
+  const dirIdx = useRef(0) // initial heading: right
   const nextTurnAt = useRef(0)
   const scroll = useRef({ x: 0, y: 0 })
   const cursor = useRef({ x: 0, y: 0, active: false })
@@ -118,47 +114,21 @@ export function Cursor() {
         window.innerHeight
       )
 
-      // Decide the head's step this tick.
-      //   - CHASE + head on cursor cell → orbit the cursor.
-      //   - CHASE + head off cursor → step one cell toward cursor.
-      //   - wander → step in current heading.
+      // Decide the head's step this tick (simple chase — no orbit,
+      // no random turns; one cardinal direction per tick, the one that
+      // heads most toward the cursor cell).
       const head = positions.current[LENGTH - 1]!
       let stepX = 0
       let stepY = 0
       if (SNAKE_CHASES_CURSOR && cursor.current.active) {
         const tgx = Math.round(cursor.current.x / BLOCK) * BLOCK
         const tgy = Math.round(cursor.current.y / BLOCK) * BLOCK
-        if (orbiting.current) {
-          if (
-            Math.round(cursor.current.x / BLOCK) * BLOCK !==
-              orbitCenter.current.x ||
-            Math.round(cursor.current.y / BLOCK) * BLOCK !==
-              orbitCenter.current.y
-          ) {
-            orbiting.current = false
-          } else {
-            const side = DIRECTIONS[orbitStep.current]!
-            stepX = side.x * BLOCK
-            stepY = side.y * BLOCK
-            orbitStep.current = (orbitStep.current + 1) % 4
-          }
-        }
-        if (!orbiting.current) {
-          const dx = tgx - head.x
-          const dy = tgy - head.y
-          if (dx === 0 && dy === 0) {
-            orbiting.current = true
-            orbitCenter.current = { x: tgx, y: tgy }
-            orbitStep.current = 0
-            const side = DIRECTIONS[0]!
-            stepX = side.x * BLOCK
-            stepY = side.y * BLOCK
-            orbitStep.current = 1
-          } else if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
-            stepX = Math.sign(dx) * BLOCK
-          } else if (dy !== 0) {
-            stepY = Math.sign(dy) * BLOCK
-          }
+        const dx = tgx - head.x
+        const dy = tgy - head.y
+        if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+          stepX = Math.sign(dx) * BLOCK
+        } else if (dy !== 0) {
+          stepY = Math.sign(dy) * BLOCK
         }
       } else {
         const dir = DIRECTIONS[dirIdx.current]!
@@ -192,6 +162,32 @@ export function Cursor() {
         pickRandomTurn()
         nextTurnAt.current =
           performance.now() + TURN_MIN_MS + Math.random() * TURN_RAND_MS
+      }
+
+      // Self-collision: if the head landed on a body segment, the
+      // snake "dies" — we respawn the chain at its initial seed. Each
+      // tick still keeps moving, so the snake keeps chasing / wandering;
+      // a respawn just resets the chain shape.
+      for (let i = 0; i < LENGTH - 1; i++) {
+        if (
+          positions.current[LENGTH - 1]!.x === positions.current[i]!.x &&
+          positions.current[LENGTH - 1]!.y === positions.current[i]!.y
+        ) {
+          respawn()
+          break
+        }
+      }
+    }
+
+    function respawn() {
+      const startX = BLOCK * 4
+      const startY = BLOCK * 2
+      for (let i = 0; i < LENGTH; i++) {
+        positions.current[i] = {
+          x: startX - (LENGTH - 1 - i) * BLOCK,
+          y: startY,
+        }
+        prevBlocks.current[i] = { x: positions.current[i]!.x, y: positions.current[i]!.y }
       }
     }
 
@@ -268,7 +264,7 @@ export function Cursor() {
           ref={(el) => {
             refs.current[i] = el
           }}
-          className="pointer-events-none fixed left-0 top-0 hidden rounded-sm bg-foreground/30 mix-blend-difference md:block"
+          className="pointer-events-none fixed left-0 top-0 hidden bg-foreground/30 mix-blend-difference md:block [image-rendering:pixelated]"
           style={{
             width: `${BLOCK}px`,
             height: `${BLOCK}px`,

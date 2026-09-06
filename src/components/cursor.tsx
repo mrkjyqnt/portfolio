@@ -268,12 +268,16 @@ export function Cursor() {
           ref={(el) => {
             refs.current[i] = el
           }}
-          className="pointer-events-none fixed left-0 top-0 hidden rounded-sm bg-foreground md:block"
+          className="pointer-events-none fixed left-0 top-0 hidden rounded-sm bg-foreground/30 mix-blend-difference md:block"
           style={{
             width: `${BLOCK}px`,
             height: `${BLOCK}px`,
             opacity: 0,
-            zIndex: 0,
+            // Negative z-index + position: fixed → paints behind any
+            // content (z-index 0 or auto). mix-blend-difference inverts
+            // against any background so the dim snake is always visible
+            // (lighter over dark, darker over light).
+            zIndex: -1,
           }}
         />
       ))}
